@@ -4,6 +4,8 @@
 
 **Learn alongside the AI.** When you run `/kb-learn`, Claude doesn't just store text — it researches, cross-references, challenges claims, and builds a structured knowledge base that both of you can draw from. You learn, it learns, and every future conversation starts smarter.
 
+> Looking for the installable plugin? See [knowledge-plugin](https://github.com/farzadshbfn/knowledge-plugin).
+
 ## Why This Exists
 
 LLMs forget everything between conversations. Context windows are expensive and finite. These skills solve both:
