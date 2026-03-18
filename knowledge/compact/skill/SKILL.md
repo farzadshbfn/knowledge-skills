@@ -1,6 +1,6 @@
 ---
 name: kb-compact
-description: Compacts KB directories — extracts legacy, unifies terminology, splits oversized notes, fixes indexes, reconciles with skill folders. Default: single directory. Use --deep for recursive bottom-up traversal.
+description: "Compacts KB directories — extracts legacy, unifies terminology, splits oversized notes, fixes indexes, reconciles with skill folders. Default: single directory. Use --deep for recursive bottom-up traversal."
 argument-hint: "[--deep] [path/to/directory]"
 hooks:
   PostToolUse:
