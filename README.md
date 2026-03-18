@@ -1,4 +1,7 @@
-# Knowledge Skills for Claude
+# Knowledge Skills
+
+![Claude](https://img.shields.io/badge/Claude-compatible-D97757?logo=claude&logoColor=fff)
+![Cursor](https://img.shields.io/badge/Cursor-compatible-007ACC?logo=cursor&logoColor=fff)
 
 ![Knowledge Skills](assets/banner.png)
 
