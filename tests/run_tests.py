@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pytest"]
 # ///
-"""Run all monitoring skill tests."""
+"""Run all skill tests."""
 import sys
 from pathlib import Path
 

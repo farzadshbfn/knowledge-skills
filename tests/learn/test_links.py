@@ -1,12 +1,8 @@
 """Tests for link extraction, normalization, broken links, and wikilinks."""
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from validate_kb import check_broken_links, check_wikilinks, extract_md_links, normalize_path
-
 
 class TestExtractMdLinks:
     def test_basic_link(self):
@@ -40,7 +36,6 @@ class TestExtractMdLinks:
         content = "See [`skill/SKILL.md`](skill/SKILL.md) for details."
         assert extract_md_links(content) == [(1, "skill/SKILL.md")]
 
-
 class TestNormalizePath:
     def test_simple_relative(self):
         assert normalize_path("topic", "note.md") == "topic/note.md"
@@ -59,7 +54,6 @@ class TestNormalizePath:
 
     def test_empty_base(self):
         assert normalize_path("", "note.md") == "note.md"
-
 
 class TestCheckBrokenLinks:
     def test_no_broken_links(self):
@@ -93,7 +87,6 @@ class TestCheckBrokenLinks:
     def test_at_links_not_flagged_as_broken(self):
         files = {"topic/note.md": "See [@ios/other.md](@ios/other.md)."}
         assert not any(i.check == "broken_link" for i in check_broken_links(files))
-
 
 class TestCheckWikilinks:
     def test_no_wikilinks(self):

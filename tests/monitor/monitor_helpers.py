@@ -2,12 +2,7 @@
 
 import json
 import os
-import sys
 from pathlib import Path
-
-# Make the scripts directory importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 
 def setup_kb_config(tmp_path: Path, kb_roots: list[dict] | None = None) -> Path:
     """Create .claude/knowledge-base/config.json in tmp_path."""
@@ -19,7 +14,6 @@ def setup_kb_config(tmp_path: Path, kb_roots: list[dict] | None = None) -> Path:
     config_file.write_text(json.dumps({"kb_roots": kb_roots}))
     return config_file
 
-
 def setup_access_log(tmp_path: Path, entries: list[dict]) -> Path:
     """Create .claude/knowledge-base/access-log.jsonl in tmp_path."""
     log_dir = tmp_path / ".claude" / "knowledge-base"
@@ -28,7 +22,6 @@ def setup_access_log(tmp_path: Path, entries: list[dict]) -> Path:
     lines = [json.dumps(e) for e in entries]
     log_file.write_text("\n".join(lines) + ("\n" if lines else ""))
     return log_file
-
 
 def setup_memory_dir(tmp_path: Path, content: str = "") -> Path:
     """Create a memory directory with monitoring_kb_observations.md inside tmp_path."""
@@ -39,13 +32,11 @@ def setup_memory_dir(tmp_path: Path, content: str = "") -> Path:
         memory_file.write_text(content)
     return memory_dir
 
-
 def setup_topic_with_skill(tmp_path: Path, topic: str) -> Path:
     """Create a KB topic that has a skill/ folder."""
     skill_dir = tmp_path / "knowledge" / topic / "skill"
     skill_dir.mkdir(parents=True, exist_ok=True)
     return skill_dir
-
 
 def setup_topic_without_skill(tmp_path: Path, topic: str) -> Path:
     """Create a KB topic without a skill/ folder."""
@@ -54,7 +45,6 @@ def setup_topic_without_skill(tmp_path: Path, topic: str) -> Path:
     index_file = topic_dir / "index.md"
     index_file.write_text(f"---\nname: {topic}\ndescription: Test.\n---\n")
     return topic_dir
-
 
 def make_log_entry(
     topic: str,
@@ -70,7 +60,6 @@ def make_log_entry(
     if kind != "kb":
         entry["kind"] = kind
     return entry
-
 
 MEMORY_WITH_GATES = """\
 ---

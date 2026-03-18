@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-18 -- [maintenance] Extract tests to top-level tests/ directory
+
+Moved all test files from `knowledge/*/skill/scripts/tests/` to `tests/` so they are not installed as part of skills. Renamed per-skill `helpers.py` to `find_helpers.py`, `learn_helpers.py`, `monitor_helpers.py` to avoid import collisions. Added root `tests/conftest.py` for shared sys.path setup.
+
+- MOVE: `knowledge/{find,learn,monitor,view}/skill/scripts/tests/` → `tests/{find,learn,monitor,view}/`
+- CREATE: `tests/conftest.py` — root conftest adding all skill script dirs to sys.path
+- CREATE: `tests/run_tests.py` — single unified test runner
+- UPDATE: all test files — removed inline `sys.path.insert`, renamed helper imports
+
 ## 2026-03-18 -- [fix] Remove curl-pipe-sh pattern from kb-bootstrap
 
 Replaced `curl | sh` uv install instruction with package manager alternatives (brew, pip) and a link to official docs. Fixes Snyk E005 security finding.

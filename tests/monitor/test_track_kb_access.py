@@ -3,10 +3,6 @@
 import io
 import json
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 from track_kb_access import (
@@ -17,7 +13,7 @@ from track_kb_access import (
     trim_old_entries,
     check_mid_session,
 )
-from helpers import (
+from monitor_helpers import (
     MEMORY_EMPTY,
     MEMORY_WITH_GATES,
     make_log_entry,
@@ -27,7 +23,6 @@ from helpers import (
     setup_topic_with_skill,
     setup_topic_without_skill,
 )
-
 
 # ===================================================================
 # extract_topic
@@ -86,7 +81,6 @@ class TestExtractTopic:
         setup_kb_config(tmp_path)
         assert extract_topic("src/other/file.md", str(tmp_path)) is None
 
-
 # ===================================================================
 # trim_old_entries
 # ===================================================================
@@ -144,7 +138,6 @@ class TestTrimOldEntries:
         # Only valid recent entries kept, malformed dropped
         assert len(remaining) == 600
 
-
 # ===================================================================
 # topic_has_skill
 # ===================================================================
@@ -174,7 +167,6 @@ class TestTopicHasSkill:
         skill_dir = tmp_path / "ios" / "knowledge" / "swift" / "skill"
         skill_dir.mkdir(parents=True)
         assert topic_has_skill("swift", str(tmp_path)) is True
-
 
 # ===================================================================
 # is_gated
@@ -214,7 +206,6 @@ class TestIsGated:
         mem_dir = setup_memory_dir(tmp_path, MEMORY_EMPTY)
         monkeypatch.setattr("track_kb_access._find_memory_dir", lambda cwd: str(mem_dir))
         assert is_gated("any-topic", str(tmp_path)) is False
-
 
 # ===================================================================
 # check_mid_session
@@ -311,7 +302,6 @@ class TestCheckMidSession:
         # sess1111 only has 2 reads — below threshold
         check_mid_session(str(log_file), "sess1111", "my-topic", str(tmp_path))
         assert capsys.readouterr().out == ""
-
 
 # ===================================================================
 # main (integration)

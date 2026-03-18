@@ -1,15 +1,9 @@
 """Tests for frontmatter parsing and validation."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from validate_kb import (
     ASSET, TOPIC, INDEX, PROJECT_AGENT, REFERENCE, SKILL, SKILL_AGENT, UNKNOWN,
     parse_frontmatter, validate_frontmatter,
 )
-
 
 class TestParseFrontmatter:
     def test_valid_topic_fm(self):
@@ -75,7 +69,6 @@ class TestParseFrontmatter:
     def test_tools_comma_separated_string(self):
         fm, _ = parse_frontmatter("---\ntools: Read, Glob, Grep\n---\n")
         assert fm["tools"] == "Read, Glob, Grep"
-
 
 class TestValidateFrontmatter:
     def test_valid_note(self):

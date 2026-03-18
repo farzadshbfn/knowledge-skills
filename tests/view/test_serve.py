@@ -8,7 +8,6 @@
 import json
 import os
 import re
-import sys
 import threading
 import urllib.request
 import urllib.error
@@ -18,7 +17,6 @@ from unittest.mock import patch
 import pytest
 
 # Ensure serve module is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from serve import (
     _should_skip,
     create_server,
@@ -29,7 +27,6 @@ from serve import (
     resolve_kb_path,
     strip_frontmatter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: strip_frontmatter
@@ -77,7 +74,6 @@ class TestStripFrontmatter:
         meta, body = strip_frontmatter(content)
         assert meta["argument-hint"] == "some hint"
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: resolve_kb_path
 # ---------------------------------------------------------------------------
@@ -98,7 +94,6 @@ class TestResolveKbPath:
     def test_empty_config(self):
         assert resolve_kb_path({"kb_roots": []}, "core") is None
         assert resolve_kb_path({}, "core") is None
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: resolve_cross_kb_links
@@ -138,7 +133,6 @@ class TestResolveCrossKbLinks:
         md = "[ref](@core/note.md)"
         result = resolve_cross_kb_links(md, {}, )
         assert result == md
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: fuzzy_match
@@ -202,7 +196,6 @@ class TestFuzzyMatch:
         assert fuzzy_match("grok", "Grok Image Prompting") is not None
         assert fuzzy_match("nav", "Swift Navigation") is not None
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: is_safe_path
 # ---------------------------------------------------------------------------
@@ -223,7 +216,6 @@ class TestIsSafePath:
     def test_nested_safe(self, tmp_path):
         root = str(tmp_path)
         assert is_safe_path(root, "a/../b/note.md") is True
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: load_config
@@ -252,7 +244,6 @@ class TestLoadConfig:
         result = load_config(str(tmp_path))
         assert result["kb_roots"] == []
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: slugify (mirrors client-side JS slugify for header anchors)
 # ---------------------------------------------------------------------------
@@ -264,7 +255,6 @@ def slugify(text: str) -> str:
     s = re.sub(r"\s+", "-", s)
     s = re.sub(r"-+", "-", s)
     return s.strip("-")
-
 
 class TestSlugify:
     def test_basic(self):
@@ -287,7 +277,6 @@ class TestSlugify:
 
     def test_empty(self):
         assert slugify("") == ""
-
 
 class TestAnchorHeaderConsistency:
     """Verify that ](#slug) anchor links in markdown resolve to actual headers via slugify."""
@@ -334,7 +323,6 @@ class TestAnchorHeaderConsistency:
         headers = self._extract_headers(body)
         assert "nonexistent" not in headers
 
-
 @pytest.fixture(scope="session")
 def toggle_server(tmp_path_factory):
     """Server for source toggle contract tests."""
@@ -353,14 +341,13 @@ def toggle_server(tmp_path_factory):
     (tmp_path / "kb" / "note.md").write_text(
         "---\nname: Original\ndescription: Test\n---\n\n# Content\n\nBody text."
     )
-    viewer_dir = str(Path(__file__).resolve().parent.parent)
+    viewer_dir = str(Path(__file__).resolve().parent.parent.parent / "knowledge" / "view" / "skill" / "scripts")
     server = create_server(0, str(tmp_path), viewer_dir)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{port}"
     server.shutdown()
-
 
 class TestSourceToggleContract:
     """Verify server returns both meta and body so client can build source view."""
@@ -400,8 +387,6 @@ class TestSourceToggleContract:
         assert "# Content" in reconstructed
         assert "Body text." in reconstructed
 
-
-
 # ---------------------------------------------------------------------------
 # Integration tests: HTTP server
 # ---------------------------------------------------------------------------
@@ -429,18 +414,16 @@ def test_project(tmp_path_factory):
 
     return tmp_path
 
-
 @pytest.fixture(scope="session")
 def server_url(test_project):
     """Start a test server on a random port, yield its URL, then shut down."""
-    viewer_dir = str(Path(__file__).resolve().parent.parent)
+    viewer_dir = str(Path(__file__).resolve().parent.parent.parent / "knowledge" / "view" / "skill" / "scripts")
     server = create_server(0, str(test_project), viewer_dir)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{port}"
     server.shutdown()
-
 
 class TestHTTPEndpoints:
     def _get(self, url):
@@ -579,7 +562,6 @@ class TestHTTPEndpoints:
         for i in range(len(results) - 1):
             assert results[i]["score"] <= results[i + 1]["score"]
 
-
 # ---------------------------------------------------------------------------
 # Multi-KB integration tests
 # ---------------------------------------------------------------------------
@@ -626,18 +608,16 @@ def multi_kb_project(tmp_path_factory):
 
     return tmp_path
 
-
 @pytest.fixture(scope="session")
 def multi_kb_url(multi_kb_project):
     """Start a test server for multi-KB project."""
-    viewer_dir = str(Path(__file__).resolve().parent.parent)
+    viewer_dir = str(Path(__file__).resolve().parent.parent.parent / "knowledge" / "view" / "skill" / "scripts")
     server = create_server(0, str(multi_kb_project), viewer_dir)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{port}"
     server.shutdown()
-
 
 class TestMultiKB:
     def _get(self, url):
@@ -847,7 +827,6 @@ class TestMultiKB:
             assert status == 200, f"Failed for {kb_name}: {fs_path}"
             assert data["meta"]["name"] == expected_name
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: _should_skip
 # ---------------------------------------------------------------------------
@@ -875,7 +854,7 @@ class TestTreeEndpoint:
         kb_dir.mkdir(parents=True, exist_ok=True)
         (kb_dir / "kb_loader.py").write_text("# stub")
 
-        viewer_dir = str(Path(__file__).resolve().parent.parent)
+        viewer_dir = str(Path(__file__).resolve().parent.parent.parent / "knowledge" / "view" / "skill" / "scripts")
         server = create_server(0, str(tmp_path), viewer_dir)
         port = server.server_address[1]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -925,7 +904,6 @@ class TestTreeEndpoint:
             # 500 is acceptable if kb_loader not found in test project
             assert e.code == 500
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: _should_skip
 # ---------------------------------------------------------------------------
@@ -958,7 +936,6 @@ class TestShouldSkip:
     def test_skill_path_not_skipped(self):
         root = Path("/project")
         assert not _should_skip(Path("/project/topic/skill/SKILL.md"), root)
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

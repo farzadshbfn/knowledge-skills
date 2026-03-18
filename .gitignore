@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .DS_Store
 .claude/knowledge-base/access-log.jsonl
+.claude/knowledge-base/.emitted-*

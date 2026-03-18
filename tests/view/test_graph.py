@@ -6,16 +6,13 @@
 """Tests for KB Viewer graph endpoint and build_graph."""
 
 import json
-import sys
 import threading
 import urllib.request
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from serve import build_graph, create_server, load_config
-
 
 # ---------------------------------------------------------------------------
 # Fixture: project with inter-file links
@@ -58,7 +55,6 @@ def graph_project(tmp_path_factory):
         "Cross-KB: [Tools](@core/tools/index.md)\n"
     )
     return tmp_path
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: build_graph
@@ -253,21 +249,19 @@ class TestBuildGraph:
             assert edge["source"] in ids, f"source {edge['source']} not in nodes"
             assert edge["target"] in ids, f"target {edge['target']} not in nodes"
 
-
 # ---------------------------------------------------------------------------
 # Integration: graph endpoint via HTTP
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="session")
 def graph_server(graph_project):
-    viewer_dir = str(Path(__file__).resolve().parent.parent)
+    viewer_dir = str(Path(__file__).resolve().parent.parent.parent / "knowledge" / "view" / "skill" / "scripts")
     server = create_server(0, str(graph_project), viewer_dir)
     port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{port}"
     server.shutdown()
-
 
 class TestGraphHTTP:
     def _get(self, url):
@@ -411,7 +405,6 @@ class TestGraphHTTP:
         _, html = self._get_html(f"{graph_server}/")
         assert "kb.tree.index" in html or "kb.tree && kb.tree.index" in html
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: orphan identification
 # ---------------------------------------------------------------------------
@@ -443,7 +436,6 @@ class TestOrphanNodes:
         connected = [n for n in g["nodes"] if n["name"] != "Orphan"]
         for n in connected:
             assert n["id"] in edge_ids, f"{n['name']} should have edges"
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: cross-KB edge identification
@@ -490,7 +482,6 @@ class TestCrossKBEdges:
         with urllib.request.urlopen(url, timeout=5) as resp:
             return resp.status, resp.read().decode()
 
-
 # ---------------------------------------------------------------------------
 # Exclusion: junk directories should not appear in graph
 # ---------------------------------------------------------------------------
@@ -533,7 +524,6 @@ class TestGraphExclusion:
         ids = {n["id"] for n in g["nodes"]}
         assert any("tools/index.md" in nid for nid in ids)
         assert any("editors.md" in nid for nid in ids)
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

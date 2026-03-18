@@ -2,15 +2,10 @@
 
 import io
 import sys
-from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from validate_kb import KBConfig, KBEntry, _check_file_in_kb, _read_hook_input, main
-from helpers import note, index
-
+from learn_helpers import note, index
 
 class TestCheckFileInKB:
     def test_file_inside_single_kb(self, tmp_path):
@@ -62,7 +57,6 @@ class TestCheckFileInKB:
         config = KBConfig(entries=[KBEntry("core", str(kb))])
         assert not _check_file_in_kb(config, str(extra / "note.md"))
 
-
 class TestReadHookInput:
     def test_valid_json(self):
         import select as select_mod
@@ -82,7 +76,6 @@ class TestReadHookInput:
         with mock.patch.object(select_mod, "select", return_value=([True], [], [])):
             with mock.patch("validate_kb.sys.stdin", io.StringIO("not json")):
                 assert _read_hook_input() is None
-
 
 class TestHookMode:
     def _setup_kb(self, tmp_path):
@@ -184,7 +177,6 @@ class TestHookMode:
             with mock.patch("validate_kb._get_git_changed_files", return_value=[]):
                 rc = main(["--hook", "--quiet"])
         assert rc == 2
-
 
 class TestHookModeMultiKB:
     def _setup_multi_kb(self, tmp_path):

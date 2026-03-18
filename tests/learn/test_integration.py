@@ -1,15 +1,9 @@
 """Integration tests — full validate_kb runs, edge cases, filesystem exclusion."""
 
-import sys
-from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from validate_kb import MockFileSystem, RealFileSystem, validate_kb
-from helpers import note, index, project_agent, skill
-
+from learn_helpers import note, index, project_agent, skill
 
 class TestValidateKb:
     def test_valid_kb_no_issues(self, valid_kb):
@@ -74,7 +68,6 @@ class TestValidateKb:
         result = validate_kb("kb", fs=broken_kb, agent_root=".claude/agents")
         assert any("long-no-toc" in i.file for i in result.issues if i.check == "missing_toc")
 
-
 class TestEdgeCases:
     def test_empty_kb(self):
         result = validate_kb("kb", fs=MockFileSystem({}))
@@ -96,11 +89,10 @@ class TestEdgeCases:
         assert [e for e in validate_kb("kb", fs=fs).errors if e.check != "read_error"] == []
 
     def test_agent_without_kb(self):
-        from helpers import project_agent
+        from learn_helpers import project_agent
         fs = MockFileSystem({".claude/agents/test.md": project_agent()})
         result = validate_kb("kb", fs=fs, agent_root=".claude/agents")
         assert result.stats.agent_files == 1
-
 
 class TestRealFileSystemExclusion:
     def _populate(self, tmp_path):

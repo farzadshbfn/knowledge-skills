@@ -1,17 +1,10 @@
 """Tests for structural checks — orphans, sizes, TOC, skill constraints, indexes."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from validate_kb import (
     check_index_coverage, check_missing_index, check_note_sizes,
     check_orphans, check_skill_exclusivity, check_skill_scope, check_toc,
 )
-from helpers import note, index, reference, skill, skill_agent, asset
-
+from learn_helpers import note, index, reference, skill, skill_agent, asset
 
 class TestCheckOrphans:
     def test_no_orphans(self):
@@ -42,7 +35,6 @@ class TestCheckOrphans:
         files = {"index.md": "See [note](topic/note.md).", "topic/note.md": "Content."}
         assert check_orphans(files) == []
 
-
 class TestCheckNoteSizes:
     def test_within_limit(self):
         assert check_note_sizes({"note.md": "short\n" * 100}) == []
@@ -72,7 +64,6 @@ class TestCheckNoteSizes:
         assert len(issues) == 1
         assert issues[0].file == "note.md"
 
-
 class TestCheckToc:
     def test_short_note_no_toc_needed(self):
         files = {"topic/note.md": "---\nname: N\ndescription: D\n---\n\n# Note\n\n" + "x\n" * 50}
@@ -91,7 +82,6 @@ class TestCheckToc:
     def test_non_topic_excluded(self):
         content = "---\ndate: 2026-01-01\n---\n\n# Log\n\n" + "x\n" * 120
         assert check_toc({"logs/long-log.md": content}, check_scope=set()) == []
-
 
 class TestCheckSkillExclusivity:
     def test_skill_folder_with_only_index(self):
@@ -117,7 +107,6 @@ class TestCheckSkillExclusivity:
         }
         assert check_skill_exclusivity(files) == []
 
-
 class TestCheckSkillScope:
     def test_link_to_sibling_in_skill(self):
         files = {
@@ -141,7 +130,6 @@ class TestCheckSkillScope:
             "topic/skill/reference/workflow.md": reference(),
         }
         assert check_skill_scope(files) == []
-
 
 class TestCheckMissingIndex:
     def test_no_issues_when_all_folders_have_index(self):
@@ -189,7 +177,7 @@ class TestCheckMissingIndex:
         assert check_missing_index(files) == []
 
     def test_ignores_non_topic_files(self):
-        from helpers import project_agent
+        from learn_helpers import project_agent
         files = {"CHANGELOG.md": "# Changelog", ".claude/agents/sync.md": project_agent()}
         assert check_missing_index(files) == []
 
@@ -239,7 +227,6 @@ class TestCheckMissingIndex:
             "characters/dino.md": note("Dino"),
         }
         assert check_missing_index(files) == []
-
 
 class TestCheckIndexCoverage:
     def test_no_issues_when_all_linked(self):

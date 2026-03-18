@@ -23,4 +23,4 @@ All skills are KB-backed. KB = "what/where/when", Skills = "how".
 
 ## Tests
 
-`uv run path/to/tests/run_tests.py -q` — each skill has its own `run_tests.py` with inline deps.
+`uv run tests/run_tests.py -q` — runs all tests. Tests live in `tests/` (not inside skills).

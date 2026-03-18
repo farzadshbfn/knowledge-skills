@@ -2,10 +2,6 @@
 
 import json
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 from analyze_access import (
@@ -21,7 +17,7 @@ from analyze_access import (
     load_log,
     main,
 )
-from helpers import (
+from monitor_helpers import (
     MEMORY_EMPTY,
     MEMORY_WITH_GATES,
     make_log_entry,
@@ -31,7 +27,6 @@ from helpers import (
     setup_topic_with_skill,
     setup_topic_without_skill,
 )
-
 
 # ===================================================================
 # load_log
@@ -67,7 +62,6 @@ class TestLoadLog:
     def test_missing_file(self, tmp_path):
         entries = load_log(str(tmp_path))
         assert entries == []
-
 
 # ===================================================================
 # compute_topic_stats
@@ -137,7 +131,6 @@ class TestComputeTopicStats:
         setup_kb_config(tmp_path)
         stats = compute_topic_stats([], str(tmp_path))
         assert stats == []
-
 
 # ===================================================================
 # find_candidates
@@ -213,7 +206,6 @@ class TestFindCandidates:
         candidates = find_candidates(stats, str(tmp_path), min_sessions=2, min_reads=5)
         assert len(candidates) == 1
 
-
 # ===================================================================
 # load_health
 # ===================================================================
@@ -247,7 +239,6 @@ class TestLoadHealth:
         monkeypatch.setattr("analyze_access._find_memory_dir", lambda cwd: None)
         entries = load_health(str(tmp_path))
         assert entries == []
-
 
 # ===================================================================
 # format_json
@@ -293,7 +284,6 @@ class TestFormatJson:
         assert "top_topics" in parsed
         assert "candidates" in parsed
         assert "health" in parsed
-
 
 # ===================================================================
 # format_context
@@ -365,7 +355,6 @@ class TestFormatContext:
         )
         assert format_context(result) == ""
 
-
 # ===================================================================
 # analyze (integration)
 # ===================================================================
@@ -406,7 +395,6 @@ class TestAnalyze:
         assert len(result.top_topics) == 1
         assert result.candidates == []
         assert result.health == []
-
 
 # ===================================================================
 # main (CLI)

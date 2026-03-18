@@ -1,12 +1,6 @@
 """Tests for file classification logic."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from validate_kb import ASSET, TOPIC, INDEX, PROJECT_AGENT, REFERENCE, SKILL, SKILL_AGENT, UNKNOWN, classify_file
-
 
 class TestClassifyFile:
     def test_topic_note(self):

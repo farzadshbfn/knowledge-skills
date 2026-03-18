@@ -3,10 +3,6 @@
 import io
 import json
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 from track_kb_access import (
@@ -15,13 +11,12 @@ from track_kb_access import (
     check_mid_session,
     main,
 )
-from helpers import (
+from monitor_helpers import (
     make_log_entry,
     setup_access_log,
     setup_kb_config,
     setup_topic_without_skill,
 )
-
 
 # ===================================================================
 # extract_code_module — now returns immediate parent dir
@@ -71,7 +66,6 @@ class TestExtractCodeModule:
     def test_four_level_path(self, tmp_path):
         setup_kb_config(tmp_path)
         assert extract_code_module("a/b/c/d/file.py", str(tmp_path)) == "a/b/c/d"
-
 
 # ===================================================================
 # find_code_cluster — hierarchical spread-scaled threshold
@@ -200,7 +194,6 @@ class TestFindCodeCluster:
         )
         assert find_code_cluster(entries) is None
 
-
 # ===================================================================
 # code reads logged with kind=code
 # ===================================================================
@@ -281,7 +274,6 @@ class TestCodeLogging:
         self._run_main(monkeypatch, data)
         log_file = tmp_path / ".claude" / "knowledge-base" / "access-log.jsonl"
         assert not log_file.exists()
-
 
 # ===================================================================
 # code mid-session nudge (via check_mid_session → find_code_cluster)

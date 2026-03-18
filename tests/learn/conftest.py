@@ -1,14 +1,8 @@
 """Pytest fixtures for validate_kb tests."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import pytest
 from validate_kb import MockFileSystem
-from helpers import (
+from learn_helpers import (
     asset,
     note,
     index,
@@ -17,7 +11,6 @@ from helpers import (
     skill,
     skill_agent,
 )
-
 
 @pytest.fixture
 def valid_kb() -> MockFileSystem:
@@ -55,7 +48,6 @@ def valid_kb() -> MockFileSystem:
             "sync", "Sync agent.", "Read, Glob, Grep", "opus", ["topic-a"],
         ),
     })
-
 
 @pytest.fixture
 def broken_kb() -> MockFileSystem:

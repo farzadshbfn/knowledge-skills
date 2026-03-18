@@ -6,11 +6,7 @@
 """Tests for kb_loader.py — KB structure loading for AI agents."""
 
 import json
-import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 from kb_loader import (
@@ -33,8 +29,7 @@ from kb_loader import (
     node_to_dict,
     structure_to_dict,
 )
-from helpers import note, index, project_agent, reference, skill, skill_agent
-
+from find_helpers import note, index, project_agent, reference, skill, skill_agent
 
 # ===================================================================
 # extract_meta
@@ -60,7 +55,6 @@ class TestExtractMeta:
         name, desc = extract_meta('---\nname: "Quoted"\ndescription: \'Single\'\n---\n')
         assert name == "Quoted"
         assert desc == "Single"
-
 
 # ===================================================================
 # build_category_tree
@@ -192,7 +186,6 @@ class TestBuildCategoryTree:
         # CHANGELOG.md should not appear in tree
         assert not root.notes
 
-
 # ===================================================================
 # load_kb
 # ===================================================================
@@ -225,7 +218,6 @@ class TestLoadKb:
         fs = MockFileSystem({})
         result = load_kb("kb", fs=fs)
         assert result.kb_name == ""
-
 
 # ===================================================================
 # Serialization
@@ -303,7 +295,6 @@ class TestSerialization:
         d = structure_to_dict(s)
         assert d["agents"][0]["path"] == ".claude/agents/sync.md"
 
-
 class TestFormatCompact:
     def test_compact_output(self):
         fs = MockFileSystem({
@@ -319,7 +310,6 @@ class TestFormatCompact:
         assert "Root" in text
         assert "Topic" in text
         assert "Note" in text
-
 
 # ===================================================================
 # format_list_topics
@@ -367,7 +357,6 @@ class TestListTopics:
         multi = MultiKBStructure(kbs=[result])
         text = format_list_topics(multi)
         assert text.index("aaa") < text.index("zzz")
-
 
 # ===================================================================
 # filter_topic
@@ -422,7 +411,6 @@ class TestTopicFilter:
         multi = MultiKBStructure(kbs=[result])
         assert filter_topic(multi, "nope") is None
 
-
 # ===================================================================
 # load_config (multi-KB format)
 # ===================================================================
@@ -457,7 +445,6 @@ class TestLoadConfig:
         })
         config = load_config("cfg.json", fs=fs)
         assert len(config.entries) == 0
-
 
 # ===================================================================
 # load_multi_kb
@@ -517,7 +504,6 @@ class TestLoadMultiKb:
         assert len(multi.kbs) == 2
         assert multi.kbs[1].total_files == 0
 
-
 # ===================================================================
 # Multi-KB format_list_topics
 # ===================================================================
@@ -565,7 +551,6 @@ class TestMultiKBListTopics:
         multi = load_multi_kb(config, fs=fs)
         text = format_list_topics(multi)
         assert "@core" in text
-
 
 # ===================================================================
 # Multi-KB filter_topic
@@ -627,7 +612,6 @@ class TestMultiKBFilterTopic:
         multi = load_multi_kb(config, fs=fs)
         assert filter_topic(multi, "nope") is None
 
-
 # ===================================================================
 # Multi-KB output paths
 # ===================================================================
@@ -648,7 +632,6 @@ class TestMultiKBOutputPaths:
         assert d["path"].startswith("kb/")
         assert d["index"]["path"].startswith("kb/")
         assert d["notes"][0]["path"].startswith("kb/")
-
 
 # ===================================================================
 # @kb-name targeting via filter_topic
@@ -688,7 +671,6 @@ class TestKBNameTargeting:
 
         # @ios/topic-a doesn't exist in ios
         assert filter_topic(multi, "@ios/topic-a") is None
-
 
 # ===================================================================
 # RealFileSystem.list_md_files — directory exclusion
@@ -737,7 +719,6 @@ class TestRealFileSystemExclusion:
         fs = RealFileSystem()
         files = fs.list_md_files(str(tmp_path))
         assert set(files) == set(valid)
-
 
 # ===================================================================
 # format_list_topics with tree nesting
@@ -901,7 +882,6 @@ class TestFormatListTopicsTree:
         assert "@core" in text
         assert "@ios" in text
 
-
 # ===================================================================
 # filter_topic with slash paths
 # ===================================================================
@@ -970,7 +950,6 @@ class TestFilterTopicSlashPath:
         kb_name, _ = out
         assert kb_name == "ios"
 
-
 # ===================================================================
 # filter_topic with @kb-name prefix
 # ===================================================================
@@ -1036,7 +1015,6 @@ class TestFilterTopicAtKB:
         assert out is not None
         kb_name, _ = out
         assert kb_name == "core"
-
 
 # ===================================================================
 # CLI --config flag
@@ -1105,7 +1083,6 @@ class TestConfigFlag:
             rc = main([str(tmp_path / "mykb"), "--list-topics"])
         assert rc == 0
         assert "direct" in buf.getvalue()
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

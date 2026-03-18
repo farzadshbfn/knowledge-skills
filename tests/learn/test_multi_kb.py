@@ -4,16 +4,12 @@ import sys
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from validate_kb import (
     KBConfig, KBEntry, MockFileSystem,
     check_changelog, check_cross_kb_escape, check_cross_kb_links,
     check_kb_path_exclusivity, main, validate_multi_kb,
 )
-from helpers import note, index
-
+from learn_helpers import note, index
 
 class TestCheckChangelog:
     def test_no_changes(self):
@@ -43,7 +39,6 @@ class TestCheckChangelog:
     def test_dotslash_changelog_detected(self):
         changed = ["knowledge/topic/note.md", "knowledge/CHANGELOG.md"]
         assert check_changelog(changed, "./knowledge") == []
-
 
 class TestMainChangelog:
     def test_main_reports_missing_changelog(self, tmp_path, monkeypatch, capsys):
@@ -75,7 +70,6 @@ class TestMainChangelog:
         with mock.patch("validate_kb._get_git_changed_files", return_value=[]):
             assert main(["knowledge"]) == 0
 
-
 class TestKBPathExclusivity:
     def test_no_overlap(self):
         config = KBConfig(entries=[KBEntry("core", "./knowledge"), KBEntry("ios", "./ios/knowledge")])
@@ -94,7 +88,6 @@ class TestKBPathExclusivity:
     def test_similar_prefix_not_nested(self):
         config = KBConfig(entries=[KBEntry("core", "./knowledge"), KBEntry("extra", "./knowledge-extra")])
         assert check_kb_path_exclusivity(config) == []
-
 
 class TestCrossKBLinks:
     def test_valid_cross_kb_link(self):
@@ -127,7 +120,6 @@ class TestCrossKBLinks:
         kb_file_maps = {"core": {"topic/note.md": "See [other](other.md)."}}
         assert check_cross_kb_links(config, kb_file_maps) == []
 
-
 class TestCrossKBEscape:
     def test_relative_link_escaping_into_other_kb(self):
         config = KBConfig(entries=[KBEntry("core", "./kb1"), KBEntry("ios", "./kb2")])
@@ -152,7 +144,6 @@ class TestCrossKBEscape:
         config = KBConfig(entries=[KBEntry("core", "./kb1"), KBEntry("ios", "./kb2")])
         kb_file_maps = {"core": {"topic/note.md": "See [@ios/note.md](@ios/note.md)."}, "ios": {}}
         assert check_cross_kb_escape(config, kb_file_maps) == []
-
 
 class TestValidateMultiKb:
     def test_single_valid_kb(self):

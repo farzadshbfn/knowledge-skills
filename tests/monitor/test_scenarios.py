@@ -9,13 +9,9 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import pytest
 from track_kb_access import main
-from helpers import setup_kb_config, setup_topic_without_skill, setup_topic_with_skill
-
+from monitor_helpers import setup_kb_config, setup_topic_without_skill, setup_topic_with_skill
 
 def simulate_read(monkeypatch, cwd: str, file_path: str, session_id: str = "sess-abc-123") -> int:
     """Simulate a single PostToolUse Read event."""
@@ -27,13 +23,11 @@ def simulate_read(monkeypatch, cwd: str, file_path: str, session_id: str = "sess
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(data)))
     return main()
 
-
 def get_log_entries(tmp_path: Path) -> list[dict]:
     log_file = tmp_path / ".claude" / "knowledge-base" / "access-log.jsonl"
     if not log_file.exists():
         return []
     return [json.loads(l) for l in log_file.read_text().strip().split("\n") if l.strip()]
-
 
 class TestScenarioFocusedCodeCluster:
     """Developer debugging an auth module — reads several files in the same area."""
@@ -83,7 +77,6 @@ class TestScenarioFocusedCodeCluster:
             simulate_read(monkeypatch, cwd, path)
             assert capsys.readouterr().out == ""
 
-
 class TestScenarioScatteredReads:
     """Reads spread across many subdirs of src/ — should NOT trigger."""
 
@@ -125,7 +118,6 @@ class TestScenarioScatteredReads:
             simulate_read(monkeypatch, cwd, path)
             assert capsys.readouterr().out == ""
 
-
 class TestScenarioTwoSubdirsFocused:
     """Reads concentrated in 2 subdirs of src/ — moderate threshold."""
 
@@ -161,7 +153,6 @@ class TestScenarioTwoSubdirsFocused:
         assert nudge_fired
         # Deepest cluster wins: src/auth has 5 reads (threshold 5, no subdirs)
         assert "src/auth" in nudge_target
-
 
 class TestScenarioKBTopic:
     """KB topic notes — triggers at 3 reads (unchanged)."""
@@ -204,7 +195,6 @@ class TestScenarioKBTopic:
                           f"{cwd}/knowledge/kb-management/index.md")
             assert capsys.readouterr().out == ""
 
-
 class TestScenarioMixedSession:
     """Interleaved KB and code reads — independent tracking."""
 
@@ -237,7 +227,6 @@ class TestScenarioMixedSession:
             else:
                 assert out == "", f"Unexpected nudge at: {reason}"
 
-
 class TestScenarioIgnoredPaths:
     """Files that should never be tracked."""
 
@@ -260,7 +249,6 @@ class TestScenarioIgnoredPaths:
 
         assert get_log_entries(tmp_path) == []
 
-
 class TestScenarioNudgeOnlyOnce:
     """After the nudge fires, continued reads don't repeat it."""
 
@@ -280,7 +268,6 @@ class TestScenarioNudgeOnlyOnce:
                 assert "lib/payments" in msg["systemMessage"]
 
         assert nudge_count == 1
-
 
 class TestScenarioDeepNesting:
     """Reads deep in the tree cluster at the right level."""
