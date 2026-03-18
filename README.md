@@ -9,6 +9,14 @@
 
 > Looking for the installable plugin? See [knowledge-plugin](https://github.com/farzadshbfn/knowledge-plugin).
 
+## Install
+
+```bash
+npx skills add farzadshbfn/knowledge-skills
+```
+
+Then run `/kb-bootstrap` to set up your first knowledge base.
+
 ## Why This Exists
 
 LLMs forget everything between conversations. Context windows are expensive and finite. These skills solve both:
