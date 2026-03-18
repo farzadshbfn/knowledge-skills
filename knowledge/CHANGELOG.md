@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-18 -- [fix] Remove curl-pipe-sh pattern from kb-bootstrap
+
+Replaced `curl | sh` uv install instruction with package manager alternatives (brew, pip) and a link to official docs. Fixes Snyk E005 security finding.
+
+- UPDATE: `bootstrap/skill/SKILL.md`
+
 ## 2026-03-18 -- [create] Knowledge-skills repo
 
 Extracted KB management skills from BusinessAI into a standalone, self-contained repo.

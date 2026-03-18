@@ -12,10 +12,12 @@ Sets up KB configuration and appends minimal instructions to the project's CLAUD
 
 Run `which uv`. If not found:
 
-> `uv` is required but not installed. Install it with:
+> `uv` is required but not installed. Install it via your package manager:
 > ```bash
-> curl -LsSf https://astral.sh/uv/install.sh | sh
+> brew install uv        # macOS
+> pip install uv         # pip
 > ```
+> See [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for other methods.
 > Then restart your terminal and re-run `/kb-bootstrap`.
 
 Stop if `uv` is not available.
