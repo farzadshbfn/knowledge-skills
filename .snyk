@@ -1,0 +1,16 @@
+# Snyk policy file — acknowledge known security findings
+# https://docs.snyk.io/manage-risk/prioritize-issues-for-fixing/ignore-issues
+version: v1.0.0
+ignore:
+  W011:
+    - "*":
+        reason: >
+          By design — kb-learn fetches external URLs to learn from articles.
+          Agent prompts include untrusted-content boundaries.
+        expires: 2027-03-18T00:00:00.000Z
+  W012:
+    - "*":
+        reason: >
+          By design — user-supplied URLs are the skill's core input.
+          URL scheme is validated (https/http only).
+        expires: 2027-03-18T00:00:00.000Z

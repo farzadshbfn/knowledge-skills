@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-18 -- [fix] Add security guards for external content fetching
+
+Added URL validation (scheme/format checks) to fetch-content.md and untrusted-content
+boundary rule to searcher agent. Added .snyk policy to acknowledge W011/W012 findings.
+
+- UPDATE: `learn/skill/reference/fetch-content.md` — URL validation section
+- UPDATE: `learn/skill/agents/searcher.md` — untrusted content boundary rule
+
 ## 2026-03-18 -- [maintenance] Extract tests to top-level tests/ directory
 
 Moved all test files from `knowledge/*/skill/scripts/tests/` to `tests/` so they are not installed as part of skills. Renamed per-skill `helpers.py` to `find_helpers.py`, `learn_helpers.py`, `monitor_helpers.py` to avoid import collisions. Added root `tests/conftest.py` for shared sys.path setup.
