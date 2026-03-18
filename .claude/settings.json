@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run .claude/skills/kb-monitor/scripts/track_kb_access.py",
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run .claude/skills/kb-learn/scripts/validate_kb.py --hook"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run .claude/skills/kb-monitor/scripts/analyze_access.py --candidates --health --format=context"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run .claude/skills/kb-monitor/scripts/analyze_access.py --candidates --health --format=context",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

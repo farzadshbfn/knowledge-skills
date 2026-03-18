@@ -1,0 +1,1 @@
+../../../compact/skill/reference/folder-structure.md

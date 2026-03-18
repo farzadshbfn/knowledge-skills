@@ -1,0 +1,17 @@
+---
+name: {{SKILL_NAME}}
+description: {{DESCRIPTION}}
+argument-hint: "{{ARGUMENT_HINT}}"
+---
+
+# /{{SKILL_NAME}} — {{TITLE}}
+
+## 1. Routing
+
+Parse `$0` (the first argument) to determine the mode:
+
+{{ROUTING_TABLE}}
+
+## 2. Mode: {{MODE_NAME}}
+
+{{MODE_INSTRUCTIONS}}

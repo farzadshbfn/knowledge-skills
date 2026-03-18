@@ -1,0 +1,1 @@
+../../../compact/skill/assets/index-note.md
