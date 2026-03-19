@@ -380,7 +380,11 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
                        "application/json")
 
     def _find_kb_loader(self) -> Path | None:
-        """Locate kb_loader.py in the configured KBs or project root."""
+        """Locate kb_loader.py: sibling skill first, then KB paths, then project root."""
+        # Sibling skill: ../../find/skill/scripts/kb_loader.py relative to this script
+        sibling = Path(__file__).resolve().parent / "../../../find/skill/scripts/kb_loader.py"
+        if sibling.resolve().exists():
+            return sibling.resolve()
         # Search inside each configured KB
         for entry in self.kb_config.get("kb_roots", []):
             kb_path = Path(self.project_root) / entry["path"]
