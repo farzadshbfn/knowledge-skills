@@ -68,11 +68,16 @@ Install PostToolUse validation hooks directly into skill SKILL.md frontmatters s
 
 ### 6a. Locate installed skills
 
-Find the skill directories by checking these locations (first match wins):
-1. `.claude/skills/` (project-local)
-2. `~/.claude/skills/` (user-global)
+Run `uv run ${CLAUDE_SKILL_DIR}/scripts/resolve_skill_paths.py` to locate installed kb-skills and resolve script paths. The script checks project-local (`.claude/skills/`) then user-global (`~/.claude/skills/`).
 
-Verify that `kb-learn`, `kb-compact`, `kb-mint`, and `kb-monitor` exist there.
+Output is JSON with these fields:
+- `skills_dir` — where kb-skills are installed
+- `validation` — resolved path to `validate_kb.py`
+- `monitoring` — resolved paths to monitoring scripts (`null` if kb-monitor not installed)
+
+**If the script exits with code 1**: `kb-learn` is missing — stop and tell the user KB skills are not installed.
+
+**If monitoring paths are null**: tell the user monitoring features won't be available (6c will be skipped).
 
 ### 6b. Update skill frontmatters
 
@@ -159,4 +164,4 @@ If the user chooses to add, merge into the same settings file used in 6c — do 
 
 ## 7. Confirm
 
-Tell the user: "KB is set up. You can start learning with `/kb-learn`."
+Tell the user: "KB is set up. Restart Claude Code to pick up the new hooks, then start learning with `/kb-learn`."

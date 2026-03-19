@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-19 -- [feat] Add resolve_skill_paths script and restart hint
+
+Added bootstrap/scripts/resolve_skill_paths.py to locate installed skills
+and resolve script paths. Bootstrap Step 7 now recommends restarting Claude Code.
+
 ## 2026-03-19 -- [feat] Bootstrap installs PostToolUse hooks into skill frontmatters
 
 Reworked Step 6: bootstrap now resolves the real path to validate_kb.py and
