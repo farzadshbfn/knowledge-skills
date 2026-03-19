@@ -2,12 +2,6 @@
 name: kb-learn
 description: "Manages a personal knowledge base with learning tracking. Modes: (1) learn from articles, (2) learn about topics, (3) fix errors. Uses markdown links with relative paths for cross-references. Maintains a rolling changelog, validates links, and keeps a markdown-compatible knowledge base. When a note reaches ~500 lines, suggests /kb-compact."
 argument-hint: "<article|topic|fix> [url-or-text|topic-name|description]"
-hooks:
-  PostToolUse:
-    - matcher: "Write|Edit|Bash"
-      hooks:
-        - type: command
-          command: "uv run .claude/skills/kb-learn/scripts/validate_kb.py --quiet --json"
 ---
 
 # /kb-learn
@@ -74,7 +68,7 @@ All KB discovery goes through the [scouter agent](agents/scouter.md). Never use 
 
 ### How to spawn scouters
 
-1. Read the kb-find SKILL.md at `knowledge/find/skill/SKILL.md`
+1. Read the kb-find SKILL.md at `${CLAUDE_SKILL_DIR}/../../find/skill/SKILL.md`
 2. Build prompt: scouter body text (after frontmatter) + separator + full kb-find SKILL.md content
 3. Spawn Agent with `model: haiku`, `background: true`
 
@@ -159,3 +153,13 @@ Conventions apply to new notes by default. Existing notes not moved unless reque
 ### Moving files
 
 When relocation requested: `mv` files → run `validate_kb.py` → fix reported broken links. Don't rewrite content just to relocate.
+
+## 7. Validation
+
+After completing KB changes, run the validator to catch broken links, frontmatter issues, and structural errors:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/scripts/validate_kb.py --quiet --json
+```
+
+Fix any reported errors before finishing.

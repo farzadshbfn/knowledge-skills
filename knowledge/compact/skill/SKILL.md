@@ -2,12 +2,6 @@
 name: kb-compact
 description: "Compacts KB directories — extracts legacy, unifies terminology, splits oversized notes, fixes indexes, reconciles with skill folders. Default: single directory. Use --deep for recursive bottom-up traversal."
 argument-hint: "[--deep] [path/to/directory]"
-hooks:
-  PostToolUse:
-    - matcher: "Write|Edit|Bash"
-      hooks:
-        - type: command
-          command: "uv run .claude/skills/kb-learn/scripts/validate_kb.py --quiet --json"
 ---
 
 # /kb-compact
@@ -44,3 +38,13 @@ Every run changing knowledge files MUST prepend to `<kb-root>/CHANGELOG.md` per 
 ## 6. User Approval
 
 After all agents complete: present combined summary (files processed/moved/merged/split/created/deleted, terminology, legacy, indexes). AskUserQuestion: "Keep all", "Revert selectively", "Revert all". Selective: per-directory summaries, revert via `git checkout -- <paths>`.
+
+## 7. Validation
+
+After completing KB changes, run the validator to catch broken links, frontmatter issues, and structural errors:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json
+```
+
+Fix any reported errors before finishing.

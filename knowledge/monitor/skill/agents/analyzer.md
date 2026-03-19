@@ -17,7 +17,7 @@ You receive:
 
 1. Run the analysis script:
    ```bash
-   uv run knowledge/monitor/skill/scripts/analyze_access.py --top-topics --candidates --format=json
+   uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --top-topics --candidates --format=json
    ```
 2. Parse the JSON output
 3. For each candidate topic, read its `index.md` to understand what the topic covers

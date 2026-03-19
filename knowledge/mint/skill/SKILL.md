@@ -38,7 +38,17 @@ Convert a KB concept topic into a KB-backed skill.
 
 Run Section 3 first, then add Cowork-specific considerations per [reference/plugin-packaging-guide.md § Cowork](reference/plugin-packaging-guide.md): connectors (MCP as GUI connectors), GUI installation (no CLI-only steps), non-dev users (`user-invocable: false`), marketplace labels. Present additions for approval.
 
-## 5. Scripts and Testing
+## 5. Validation
+
+After completing KB or skill changes, run the validator to catch broken links, frontmatter issues, and structural errors:
+
+```bash
+uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json
+```
+
+Fix any reported errors before finishing.
+
+## 6. Scripts and Testing
 
 - **Scripts/MCP**: See [reference/uv-scripting-guide.md](reference/uv-scripting-guide.md)
 - **Testing**: See [reference/testing-guide.md](reference/testing-guide.md)

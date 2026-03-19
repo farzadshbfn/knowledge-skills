@@ -4,12 +4,6 @@ description: Compacts one KB directory — reconcile skill folder, extract legac
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 background: true
-hooks:
-  PostToolUse:
-    - matcher: "Write|Edit|Bash"
-      hooks:
-        - type: command
-          command: "uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json"
 ---
 
 Compact **one directory** given `directory_path` and `kb_root`. Return a structured change summary.

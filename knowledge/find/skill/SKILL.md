@@ -22,7 +22,7 @@ Parse query from `$0`, strip flags. Two modes:
 
 ## 2. Tier 1 — KB Loader Queries
 
-`KB_LOADER="knowledge/find/skill/scripts/kb_loader.py"`
+`KB_LOADER="${CLAUDE_SKILL_DIR}/scripts/kb_loader.py"`
 
 1. `$KB_LOADER --list-topics` — tree by `@kb-name` with `[skill]` tags.
 2. Pick relevant topics. Slash paths (`compact`) or `@kb-name/path`. Challenge: also contradicting topics.

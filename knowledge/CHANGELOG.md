@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-19 -- [fix] Move validation from frontmatter hooks to skill body
+
+Removed PostToolUse hooks from SKILL.md frontmatter (broken: `${CLAUDE_SKILL_DIR}`
+not substituted in frontmatter hooks, [#36135](https://github.com/anthropics/claude-code/issues/36135)).
+Added explicit validation sections to skill bodies where `${CLAUDE_SKILL_DIR}` works.
+Updated bootstrap to suggest users add hooks to their system settings.
+
+- UPDATE: `learn/skill/SKILL.md` — removed frontmatter hook, added §7 Validation
+- UPDATE: `compact/skill/SKILL.md` — removed frontmatter hook, added §7 Validation
+- UPDATE: `compact/skill/agents/compacter.md` — removed frontmatter hook
+- UPDATE: `mint/skill/SKILL.md` — added §5 Validation
+- UPDATE: `bootstrap/skill/SKILL.md` — added §6 suggesting hooks setup
+- UPDATE: `monitor/skill/agents/analyzer.md` — use `${CLAUDE_SKILL_DIR}` instead of hardcoded path
+
 ## 2026-03-18 -- [fix] Add security guards for external content fetching
 
 Added URL validation (scheme/format checks) to fetch-content.md and untrusted-content
