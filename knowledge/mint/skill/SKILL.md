@@ -2,6 +2,12 @@
 name: kb-mint
 description: Mints skills from KB topics, packages skills into plugins, and prepares them for Cowork. Use when asked to create a skill from KB content, convert to a plugin, package for distribution, or make something cowork-ready. Also triggers on `convert this to a skill`, `package as plugin`, `mint a skill`, or `make this a plugin`.
 argument-hint: "[--skill <topic-path> | --plugin <skills...> | --cowork <skills...>]"
+hooks:
+  PostToolUse:
+    - matcher: "Write|Edit|Bash"
+      hooks:
+        - type: command
+          command: "uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --hook"
 ---
 
 # /kb-mint — KB-to-Skill-to-Plugin Pipeline

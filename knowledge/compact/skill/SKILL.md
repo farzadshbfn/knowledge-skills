@@ -2,6 +2,12 @@
 name: kb-compact
 description: "Compacts KB directories — extracts legacy, unifies terminology, splits oversized notes, fixes indexes, reconciles with skill folders. Default: single directory. Use --deep for recursive bottom-up traversal."
 argument-hint: "[--deep] [path/to/directory]"
+hooks:
+  PostToolUse:
+    - matcher: "Write|Edit|Bash"
+      hooks:
+        - type: command
+          command: "uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --hook"
 ---
 
 # /kb-compact

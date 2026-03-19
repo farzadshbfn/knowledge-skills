@@ -62,43 +62,46 @@ If `$ARGS` provides a path, use it. Otherwise, ask the user using AskUserQuestio
 
 Read the project's `CLAUDE.md` (if it exists). Append the content from [assets/claude-md-snippet.md](assets/claude-md-snippet.md) — do NOT replace existing content. If the file doesn't exist, create it with only the snippet content.
 
-## 6. Suggest Hooks
+## 6. Install Skill Hooks
 
-After setup, suggest the user add validation and monitoring hooks to their settings. Present this as optional but recommended:
+Install PostToolUse validation hooks directly into skill SKILL.md frontmatters so they work automatically when the skill runs.
 
-> **Recommended**: Add these hooks to your Claude Code settings for automatic KB validation and access tracking.
-> You can add them to project settings (`.claude/settings.json`) or user settings (`~/.claude/settings.json`).
+### 6a. Locate installed skills
+
+Find the skill directories by checking these locations (first match wins):
+1. `.claude/skills/` (project-local)
+2. `~/.claude/skills/` (user-global)
+
+Verify that `kb-learn`, `kb-compact`, `kb-mint`, and `kb-monitor` exist there.
+
+### 6b. Update skill frontmatters
+
+The skills ship with PostToolUse validation hooks in their frontmatter using `${CLAUDE_SKILL_DIR}` paths (which may not be substituted in frontmatter yet — see [#36135](https://github.com/anthropics/claude-code/issues/36135)). Rewrite the hook commands with concrete paths so they work immediately.
+
+For each of these three SKILL.md files (under the location found in 6a):
+- `kb-learn/SKILL.md`
+- `kb-compact/SKILL.md`
+- `kb-mint/SKILL.md`
+
+Find the `hooks:` block in the frontmatter and replace the `command:` value with the concrete path to `validate_kb.py --hook` using the location from 6a.
+
+### 6c. Suggest monitoring hooks
+
+SessionStart and PreCompact hooks cannot live in skill frontmatter — suggest adding them to settings. Use the `kb-monitor/scripts/analyze_access.py` path from the location found in 6a.
+
+These hooks analyze KB access patterns to surface topics worth converting to skills and flag skill health issues. They run at session start and before context compaction. Without them, you won't get proactive recommendations (you'd have to manually run `/kb-monitor`), and monitoring observations from earlier in the conversation are lost when context is compressed.
+
+> **Recommended**: Add these monitoring hooks to your project settings (`.claude/settings.json`) for session-start analysis and pre-compaction context:
 >
 > ```json
 > {
 >   "hooks": {
->     "PostToolUse": [
->       {
->         "matcher": "Read",
->         "hooks": [
->           {
->             "type": "command",
->             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/track_kb_access.py",
->             "async": true
->           }
->         ]
->       },
->       {
->         "matcher": "Write|Edit|Bash",
->         "hooks": [
->           {
->             "type": "command",
->             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/validate_kb.py --hook"
->           }
->         ]
->       }
->     ],
 >     "SessionStart": [
 >       {
 >         "hooks": [
 >           {
 >             "type": "command",
->             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --candidates --health --format=context"
+>             "command": "uv run <skills-location>/kb-monitor/scripts/analyze_access.py --candidates --health --format=context"
 >           }
 >         ]
 >       }
@@ -108,7 +111,7 @@ After setup, suggest the user add validation and monitoring hooks to their setti
 >         "hooks": [
 >           {
 >             "type": "command",
->             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --candidates --health --format=context",
+>             "command": "uv run <skills-location>/kb-monitor/scripts/analyze_access.py --candidates --health --format=context",
 >             "async": true
 >           }
 >         ]
@@ -118,14 +121,41 @@ After setup, suggest the user add validation and monitoring hooks to their setti
 > }
 > ```
 >
-> **Note:** `${CLAUDE_SKILL_DIR}` substitution in skill hooks is currently broken ([#36135](https://github.com/anthropics/claude-code/issues/36135)). Until fixed, replace `${CLAUDE_SKILL_DIR}` with the absolute path to the skill's `kb-monitor/` and `kb-learn/` directories. For example:
-> - `uv run /path/to/kb-monitor/skill/scripts/track_kb_access.py`
-> - `uv run /path/to/kb-learn/skill/scripts/validate_kb.py --hook`
-> - `uv run /path/to/kb-monitor/skill/scripts/analyze_access.py --candidates --health --format=context`
+> Replace `<skills-location>` with the path from 6a.
 
-Use AskUserQuestion: "Add hooks to project settings", "Add hooks to user settings", "Skip for now".
+Use AskUserQuestion: "Add monitoring hooks to project settings", "Add to user settings", "Skip".
 
-If the user chooses to add hooks, use the absolute resolved paths of the installed skills (check both `.claude/skills/kb-monitor` and `~/.claude/skills/kb-monitor`, resolve symlinks). Write the hooks into the chosen settings file, merging with any existing hooks.
+If the user chooses to add, read the target settings file (create `{"hooks":{}}` if missing), merge the SessionStart and PreCompact hooks — do NOT overwrite existing hooks.
+
+### 6d. Suggest validation hooks for settings
+
+The skills already have PostToolUse validation hooks in their frontmatter (updated in 6b), so KB changes through `/kb-learn`, `/kb-compact`, and `/kb-mint` are already covered. However, an agent might directly edit a KB file without going through a skill. Adding the same PostToolUse hook to settings catches those cases too. Good to have, but not a must.
+
+> **Optional**: Add a global validation hook to catch direct KB edits outside of skills:
+>
+> ```json
+> {
+>   "hooks": {
+>     "PostToolUse": [
+>       {
+>         "matcher": "Write|Edit|Bash",
+>         "hooks": [
+>           {
+>             "type": "command",
+>             "command": "uv run <skills-location>/kb-learn/scripts/validate_kb.py --hook"
+>           }
+>         ]
+>       }
+>     ]
+>   }
+> }
+> ```
+>
+> Replace `<skills-location>` with the path from 6a.
+
+Use AskUserQuestion: "Add validation hook to project settings", "Add to user settings", "Skip".
+
+If the user chooses to add, merge into the same settings file used in 6c — do NOT overwrite existing hooks.
 
 ## 7. Confirm
 

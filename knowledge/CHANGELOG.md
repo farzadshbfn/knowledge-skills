@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-19 -- [feat] Bootstrap installs PostToolUse hooks into skill frontmatters
+
+Reworked Step 6: bootstrap now resolves the real path to validate_kb.py and
+writes PostToolUse hooks directly into learn, compact, mint SKILL.md frontmatters.
+SessionStart and PreCompact monitoring hooks remain as suggestions for settings.json.
+
 ## 2026-03-19 -- [fix] Add missing SessionStart and PreCompact hooks to kb-bootstrap
 
 Bootstrap Step 6 only suggested PostToolUse hooks. Added the monitoring hooks
