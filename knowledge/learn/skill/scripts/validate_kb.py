@@ -486,6 +486,7 @@ def check_missing_index(files: dict[str, str]) -> list[Issue]:
         parent = str(Path(rel_path).parent)
         if parent and parent != ".":
             folders.add(parent)
+            folders.add(".")  # include root when subfolders exist
             p = Path(parent).parent
             while str(p) != ".":
                 folders.add(str(p))
@@ -494,7 +495,7 @@ def check_missing_index(files: dict[str, str]) -> list[Issue]:
     for folder in sorted(folders):
         parts = Path(folder).parts
 
-        if parts[-1] == "skill":
+        if parts and parts[-1] == "skill":
             if f"{folder}/SKILL.md" not in files:
                 issues.append(Issue(
                     "warning", "missing_index", folder,
@@ -507,11 +508,20 @@ def check_missing_index(files: dict[str, str]) -> list[Issue]:
             if skill_idx < len(parts) - 1:
                 continue
 
-        has_index = f"{folder}/index.md" in files or any(
-            Path(f).name.endswith("-index.md")
-            for f in files
-            if f.startswith(folder + "/") and "/" not in f[len(folder) + 1:]
-        )
+        if folder == ".":
+            prefix = ""
+            has_index = "index.md" in files or any(
+                Path(f).name.endswith("-index.md")
+                for f in files
+                if "/" not in f
+            )
+        else:
+            prefix = folder + "/"
+            has_index = f"{prefix}index.md" in files or any(
+                Path(f).name.endswith("-index.md")
+                for f in files
+                if f.startswith(prefix) and "/" not in f[len(prefix):]
+            )
         if not has_index:
             issues.append(Issue(
                 "error", "missing_index", folder,
@@ -551,13 +561,19 @@ def check_index_coverage(files: dict[str, str]) -> list[Issue]:
                 continue
             linked.add(normalize_path(file_dir, link))
 
+        is_root = folder == "."
         seen_subfolders: set[str] = set()
         for other in sorted(files):
             if other == rel_path:
                 continue
-            if not other.startswith(folder + "/"):
+            if Path(other).name == "CHANGELOG.md":
                 continue
-            remaining = other[len(folder) + 1:]
+            if is_root:
+                remaining = other
+            else:
+                if not other.startswith(folder + "/"):
+                    continue
+                remaining = other[len(folder) + 1:]
 
             if "/" not in remaining:
                 if other not in linked:
@@ -572,7 +588,7 @@ def check_index_coverage(files: dict[str, str]) -> list[Issue]:
                     continue
                 seen_subfolders.add(subfolder_name)
 
-                subfolder_path = f"{folder}/{subfolder_name}"
+                subfolder_path = f"{subfolder_name}" if is_root else f"{folder}/{subfolder_name}"
                 if is_skill_index:
                     has_link = any(
                         l.startswith(subfolder_path + "/") for l in linked

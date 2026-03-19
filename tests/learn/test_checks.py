@@ -208,8 +208,8 @@ class TestCheckMissingIndex:
         assert len(issues) == 1
         assert "topic-a/sub" in issues[0].file
 
-    def test_parent_folder_with_only_subfolders_needs_index(self):
-        """Root-level topics only need their own index, no parent folder required."""
+    def test_root_missing_index_when_subfolders_exist(self):
+        """KB root needs index.md when it has subfolders."""
         files = {
             "characters/index.md": index("Characters"),
             "characters/dino.md": note("Dino"),
@@ -217,7 +217,9 @@ class TestCheckMissingIndex:
             "gemini/note.md": note("Note"),
         }
         issues = check_missing_index(files)
-        assert len(issues) == 0
+        assert len(issues) == 1
+        assert issues[0].file == "."
+        assert issues[0].check == "missing_index"
 
     def test_parent_folder_with_subfolders_and_index_ok(self):
         """ with index.md and subfolders passes."""
