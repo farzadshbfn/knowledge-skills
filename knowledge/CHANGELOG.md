@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-19 -- [fix] Add missing SessionStart and PreCompact hooks to kb-bootstrap
+
+Bootstrap Step 6 only suggested PostToolUse hooks. Added the monitoring hooks
+(SessionStart + PreCompact running analyze_access.py) that were missing.
+
 ## 2026-03-19 -- [fix] Move validation from frontmatter hooks to skill body
 
 Removed PostToolUse hooks from SKILL.md frontmatter (broken: `${CLAUDE_SKILL_DIR}`

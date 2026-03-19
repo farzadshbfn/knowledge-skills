@@ -92,6 +92,27 @@ After setup, suggest the user add validation and monitoring hooks to their setti
 >           }
 >         ]
 >       }
+>     ],
+>     "SessionStart": [
+>       {
+>         "hooks": [
+>           {
+>             "type": "command",
+>             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --candidates --health --format=context"
+>           }
+>         ]
+>       }
+>     ],
+>     "PreCompact": [
+>       {
+>         "hooks": [
+>           {
+>             "type": "command",
+>             "command": "uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --candidates --health --format=context",
+>             "async": true
+>           }
+>         ]
+>       }
 >     ]
 >   }
 > }
@@ -100,6 +121,7 @@ After setup, suggest the user add validation and monitoring hooks to their setti
 > **Note:** `${CLAUDE_SKILL_DIR}` substitution in skill hooks is currently broken ([#36135](https://github.com/anthropics/claude-code/issues/36135)). Until fixed, replace `${CLAUDE_SKILL_DIR}` with the absolute path to the skill's `kb-monitor/` and `kb-learn/` directories. For example:
 > - `uv run /path/to/kb-monitor/skill/scripts/track_kb_access.py`
 > - `uv run /path/to/kb-learn/skill/scripts/validate_kb.py --hook`
+> - `uv run /path/to/kb-monitor/skill/scripts/analyze_access.py --candidates --health --format=context`
 
 Use AskUserQuestion: "Add hooks to project settings", "Add hooks to user settings", "Skip for now".
 
