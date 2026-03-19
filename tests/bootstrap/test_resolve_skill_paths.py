@@ -1,8 +1,14 @@
 """Tests for resolve_skill_paths — skill location and script path resolution."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 from resolve_skill_paths import find_skills_location, main
+
+
+def _patch_home(tmp_path):
+    """Patch Path.home() so global ~/.claude/skills/ fallback uses tmp_path."""
+    return patch.object(Path, "home", return_value=tmp_path / "fake_home")
 
 
 def _create_skills(base: Path, with_monitor: bool = True):
@@ -31,14 +37,17 @@ class TestFindSkillsLocation:
     def test_no_kb_learn_returns_none(self, tmp_path):
         skills_dir = tmp_path / ".claude" / "skills" / "kb-monitor"
         skills_dir.mkdir(parents=True)
-        assert find_skills_location(tmp_path) is None
+        with _patch_home(tmp_path):
+            assert find_skills_location(tmp_path) is None
 
     def test_no_skills_dir(self, tmp_path):
-        assert find_skills_location(tmp_path) is None
+        with _patch_home(tmp_path):
+            assert find_skills_location(tmp_path) is None
 
     def test_empty_skills_dir(self, tmp_path):
         (tmp_path / ".claude" / "skills").mkdir(parents=True)
-        assert find_skills_location(tmp_path) is None
+        with _patch_home(tmp_path):
+            assert find_skills_location(tmp_path) is None
 
 
 class TestMain:
@@ -59,7 +68,8 @@ class TestMain:
         assert result["monitoring"]["analyze_access"] is None
 
     def test_no_kb_learn_returns_none(self, tmp_path):
-        assert main(tmp_path) is None
+        with _patch_home(tmp_path):
+            assert main(tmp_path) is None
 
     def test_missing_validate_script_returns_none(self, tmp_path):
         """kb-learn dir exists but validate_kb.py is missing."""

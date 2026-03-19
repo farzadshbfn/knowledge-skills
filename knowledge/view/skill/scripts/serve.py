@@ -243,6 +243,7 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
     project_root: str = ""
     viewer_dir: str = ""
     kb_config: dict = {}
+    _config_mtime: float = 0.0
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -310,6 +311,18 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._error(500, "uv not found")
 
+    def _reload_config(self) -> dict:
+        """Reload KB config from disk when the file has changed."""
+        config_path = Path(self.project_root) / ".claude" / "knowledge-base" / "config.json"
+        try:
+            mtime = config_path.stat().st_mtime
+        except OSError:
+            return self.kb_config
+        if mtime != self._config_mtime:
+            KBViewerHandler.kb_config = load_config(self.project_root)
+            KBViewerHandler._config_mtime = mtime
+        return self.kb_config
+
     def _serve_file(self, rel_path: str):
         """Serve a markdown file with parsed frontmatter."""
         if not is_safe_path(self.project_root, rel_path):
@@ -321,25 +334,29 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
             self._error(404, f"File not found: {rel_path}")
             return
 
+        config = self._reload_config()
         content = full_path.read_text(encoding="utf-8")
         meta, body = strip_frontmatter(content)
-        body = resolve_cross_kb_links(body, self.kb_config)
+        body = resolve_cross_kb_links(body, config)
 
         response = json.dumps({"path": rel_path, "meta": meta, "body": body})
         self._respond(200, response, "application/json")
 
     def _serve_config(self):
-        self._respond(200, json.dumps(self.kb_config), "application/json")
+        config = self._reload_config()
+        self._respond(200, json.dumps(config), "application/json")
 
     def _serve_graph(self):
         """Return the file link graph for mind-map visualization."""
-        graph = build_graph(self.project_root, self.kb_config)
+        config = self._reload_config()
+        graph = build_graph(self.project_root, config)
         self._respond(200, json.dumps(graph), "application/json")
 
     def _serve_search(self, query: str):
         """Fuzzy search across all KB notes (name + description)."""
+        config = self._reload_config()
         hits: list[dict] = []
-        for entry in self.kb_config.get("kb_roots", []):
+        for entry in config.get("kb_roots", []):
             kb_path = Path(self.project_root) / entry["path"]
             topics = kb_path 
             if not topics.is_dir():
@@ -428,10 +445,16 @@ def create_server(
     blocking concurrent browser requests for static assets.
     """
     config = load_config(project_root)
+    config_path = Path(project_root) / ".claude" / "knowledge-base" / "config.json"
+    try:
+        mtime = config_path.stat().st_mtime
+    except OSError:
+        mtime = 0.0
 
     KBViewerHandler.project_root = project_root
     KBViewerHandler.viewer_dir = viewer_dir
     KBViewerHandler.kb_config = config
+    KBViewerHandler._config_mtime = mtime
 
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     return http.server.ThreadingHTTPServer(("127.0.0.1", port), KBViewerHandler)

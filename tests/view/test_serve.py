@@ -937,5 +937,160 @@ class TestShouldSkip:
         root = Path("/project")
         assert not _should_skip(Path("/project/topic/skill/SKILL.md"), root)
 
+# ---------------------------------------------------------------------------
+# Config hot-reload tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def hot_reload_project(tmp_path):
+    """Project that starts with one KB; tests add a second KB after server starts."""
+    config_dir = tmp_path / ".claude" / "knowledge-base"
+    config_dir.mkdir(parents=True)
+
+    # Start with only "alpha" KB
+    (config_dir / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "alpha", "path": "./alpha"}]
+    }))
+
+    alpha = tmp_path / "alpha"
+    alpha.mkdir()
+    (alpha / "index.md").write_text(
+        "---\nname: Alpha Root\ndescription: First KB\n---\n\n# Alpha"
+    )
+    (alpha / "note.md").write_text(
+        "---\nname: Alpha Note\n---\n\nSee [root](index.md)."
+    )
+
+    # Pre-create "beta" KB files (but not in config yet)
+    beta = tmp_path / "beta"
+    beta.mkdir()
+    (beta / "index.md").write_text(
+        "---\nname: Beta Root\ndescription: Second KB\n---\n\n# Beta"
+    )
+    (beta / "page.md").write_text(
+        "---\nname: Beta Page\n---\n\nSee [root](index.md)."
+    )
+
+    return tmp_path, config_dir / "config.json"
+
+
+@pytest.fixture()
+def hot_reload_server(hot_reload_project):
+    """Server started with only alpha KB."""
+    project_path, _ = hot_reload_project
+    viewer_dir = str(
+        Path(__file__).resolve().parent.parent.parent
+        / "knowledge" / "view" / "skill" / "scripts"
+    )
+    server = create_server(0, str(project_path), viewer_dir)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{port}"
+    server.shutdown()
+
+
+class TestConfigHotReload:
+    """Config changes on disk are picked up without server restart."""
+
+    def _get(self, url):
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return json.loads(resp.read().decode())
+
+    def test_initial_config_has_one_kb(self, hot_reload_server):
+        data = self._get(f"{hot_reload_server}/api/config")
+        assert len(data["kb_roots"]) == 1
+        assert data["kb_roots"][0]["name"] == "alpha"
+
+    def test_initial_graph_has_only_alpha(self, hot_reload_server):
+        data = self._get(f"{hot_reload_server}/api/graph")
+        kbs = {n["kb"] for n in data["nodes"]}
+        assert kbs == {"alpha"}
+
+    def test_added_kb_appears_in_config(self, hot_reload_project, hot_reload_server):
+        _, config_file = hot_reload_project
+        config_file.write_text(json.dumps({
+            "kb_roots": [
+                {"name": "alpha", "path": "./alpha"},
+                {"name": "beta", "path": "./beta"},
+            ]
+        }))
+
+        data = self._get(f"{hot_reload_server}/api/config")
+        names = [e["name"] for e in data["kb_roots"]]
+        assert "alpha" in names
+        assert "beta" in names
+
+    def test_added_kb_appears_in_graph(self, hot_reload_project, hot_reload_server):
+        _, config_file = hot_reload_project
+        config_file.write_text(json.dumps({
+            "kb_roots": [
+                {"name": "alpha", "path": "./alpha"},
+                {"name": "beta", "path": "./beta"},
+            ]
+        }))
+
+        data = self._get(f"{hot_reload_server}/api/graph")
+        kbs = {n["kb"] for n in data["nodes"]}
+        assert "alpha" in kbs
+        assert "beta" in kbs
+
+    def test_added_kb_appears_in_search(self, hot_reload_project, hot_reload_server):
+        _, config_file = hot_reload_project
+        config_file.write_text(json.dumps({
+            "kb_roots": [
+                {"name": "alpha", "path": "./alpha"},
+                {"name": "beta", "path": "./beta"},
+            ]
+        }))
+
+        data = self._get(f"{hot_reload_server}/api/search?q=Beta")
+        hits = [r["name"] for r in data["results"]]
+        assert "Beta Root" in hits
+
+    def test_no_reload_when_mtime_unchanged(self, hot_reload_project, hot_reload_server):
+        """Config is not re-parsed when the file hasn't been modified."""
+        # Hit the endpoint twice without changing config — second call should
+        # use cached config (verified by patching load_config)
+        self._get(f"{hot_reload_server}/api/config")  # prime the mtime
+
+        call_count = 0
+        original_load = load_config
+
+        def counting_load(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return original_load(*args, **kwargs)
+
+        with patch("serve.load_config", side_effect=counting_load):
+            self._get(f"{hot_reload_server}/api/config")
+            self._get(f"{hot_reload_server}/api/config")
+
+        assert call_count == 0, (
+            f"load_config called {call_count} times despite unchanged mtime"
+        )
+
+    def test_removed_kb_disappears(self, hot_reload_project, hot_reload_server):
+        """Removing a KB from config removes it from all endpoints."""
+        _, config_file = hot_reload_project
+
+        # First add beta
+        config_file.write_text(json.dumps({
+            "kb_roots": [
+                {"name": "alpha", "path": "./alpha"},
+                {"name": "beta", "path": "./beta"},
+            ]
+        }))
+        data = self._get(f"{hot_reload_server}/api/graph")
+        assert "beta" in {n["kb"] for n in data["nodes"]}
+
+        # Now remove beta
+        config_file.write_text(json.dumps({
+            "kb_roots": [{"name": "alpha", "path": "./alpha"}]
+        }))
+        data = self._get(f"{hot_reload_server}/api/graph")
+        assert "beta" not in {n["kb"] for n in data["nodes"]}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
