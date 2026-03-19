@@ -294,3 +294,40 @@ class TestCheckIndexCoverage:
         }
         folder_issues = [i for i in check_index_coverage(files) if i.file == "topic-a/index.md" and "subfolder" in i.message]
         assert len(folder_issues) == 1
+
+    def test_root_index_missing_sibling_link(self):
+        files = {
+            "index.md": index("Root"),
+            "a.md": note("A"),
+        }
+        issues = [i for i in check_index_coverage(files) if i.file == "index.md" and "sibling" in i.message]
+        assert len(issues) == 1
+        assert "a.md" in issues[0].detail
+
+    def test_root_index_missing_subfolder_link(self):
+        files = {
+            "index.md": index("Root"),
+            "topic/index.md": index("Topic"),
+            "topic/note.md": note("Note"),
+        }
+        issues = [i for i in check_index_coverage(files) if i.file == "index.md" and "subfolder" in i.message]
+        assert len(issues) == 1
+        assert "topic" in issues[0].message
+
+    def test_root_index_all_linked(self):
+        files = {
+            "index.md": index("Root") + "\n- [A](a.md)\n- [Topic](topic/index.md)\n",
+            "a.md": note("A"),
+            "topic/index.md": index("Topic"),
+        }
+        issues = [i for i in check_index_coverage(files) if i.file == "index.md"]
+        assert issues == []
+
+    def test_root_index_skips_changelog(self):
+        files = {
+            "index.md": index("Root") + "\n- [Topic](topic/index.md)\n",
+            "CHANGELOG.md": "# Changelog\n",
+            "topic/index.md": index("Topic"),
+        }
+        issues = [i for i in check_index_coverage(files) if i.file == "index.md"]
+        assert issues == []
