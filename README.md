@@ -19,7 +19,11 @@ Then run `/kb-bootstrap` to set up your first knowledge base.
 
 ## Why This Exists
 
-LLMs forget everything between conversations. Context windows are expensive and finite. These skills solve both:
+Tech moves fast — new frameworks, new patterns, new best practices every week. Keeping up with the flood of articles, release notes, and shifting conventions is a full-time job on its own. And even when you *do* read something valuable, it's gone from memory a month later.
+
+LLMs can help — but they forget everything between conversations, and their training data is always slightly behind. Context windows are expensive and finite. You end up re-explaining the same concepts, re-looking-up the same references, and losing the insights you already earned.
+
+These skills bridge the gap:
 
 - **Knowledge that grows into skills** — **Tracks what you look up across conversations**. When the same topics keep surfacing — the same notes loaded repeatedly, the same patterns referenced — it automatically flags them as skill candidates. Your most-used knowledge evolves into dedicated, reusable skills without manual curation.
 - **Token-efficient retrieval** — `/kb-find` uses a **4-tier progressive loading** system. It reads topic indexes first, then frontmatter, then TOCs, then full notes — only as deep as needed. Your entire KB is never dumped into context.
