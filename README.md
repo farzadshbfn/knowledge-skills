@@ -128,10 +128,8 @@ knowledge/
 
 **Data retrieval is near-deterministic** — Python scripts handle indexing, tree building, validation, and access tracking, saving tokens by keeping mechanical work out of the LLM's context. The LLM orchestrates workflows and makes judgment calls. The scripts do the rest.
 
-## License
-
-MIT
-
 ---
 
 Built by [Farzad Sharbafian](https://github.com/farzadshbfn)
+
+[![Follow on X](https://img.shields.io/badge/Follow-@farzadshbfn-000000?logo=x&logoColor=white)](https://x.com/farzadshbfn) — I share what I'm building, learning, and thinking about — mostly around AI, dev tools, and making agents actually useful
