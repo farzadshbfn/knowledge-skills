@@ -190,12 +190,13 @@ REQUIRED_FIELDS: dict[str, list[str]] = {
 OPTIONAL_FIELDS: dict[str, list[str]] = {
     TOPIC:       [],
     INDEX:         [],
-    SKILL:         ["argument-hint", "user-invocable", "hooks"],
-    PROJECT_AGENT: ["tools", "model", "skills", "hooks"],
-    SKILL_AGENT:   ["background", "skills", "hooks"],
+    SKILL:         ["argument-hint", "user-invocable", "hooks", "effort"],
+    PROJECT_AGENT: ["tools", "model", "skills", "hooks", "effort"],
+    SKILL_AGENT:   ["background", "skills", "hooks", "effort"],
 }
 
 ALLOWED_MODELS = {"haiku", "sonnet", "opus"}
+ALLOWED_EFFORTS = {"low", "medium", "high", "max"}
 
 
 def validate_frontmatter(
@@ -231,6 +232,11 @@ def validate_frontmatter(
         if "skills" in fm and not isinstance(fm["skills"], list):
             issues.append(Issue("warning", "invalid_skills", rel_path,
                                 f"skills should be a list, got {type(fm['skills']).__name__}"))
+
+    if file_type in (SKILL, PROJECT_AGENT, SKILL_AGENT):
+        if "effort" in fm and fm["effort"] not in ALLOWED_EFFORTS:
+            issues.append(Issue("warning", "invalid_effort", rel_path,
+                                f"Invalid effort: {fm['effort']} (expected {', '.join(sorted(ALLOWED_EFFORTS))})"))
 
     allowed = set(REQUIRED_FIELDS.get(file_type, []) + OPTIONAL_FIELDS.get(file_type, []))
     if allowed:

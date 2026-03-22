@@ -165,6 +165,49 @@ class TestValidateFrontmatter:
         issues = validate_frontmatter(fm, SKILL_AGENT, "t/skill/agents/sa.md")
         assert any(i.check == "invalid_skills" for i in issues)
 
+    # --- effort field ---
+
+    def test_skill_valid_effort(self):
+        for level in ("low", "medium", "high", "max"):
+            fm = {"name": "sk", "description": "Desc", "effort": level}
+            issues = validate_frontmatter(fm, SKILL, "t/skill/SKILL.md")
+            assert not any(i.check == "invalid_effort" for i in issues), f"effort={level} should be valid"
+            assert not any(i.check == "unexpected_field" and "effort" in i.message for i in issues)
+
+    def test_skill_invalid_effort(self):
+        fm = {"name": "sk", "description": "Desc", "effort": "extreme"}
+        issues = validate_frontmatter(fm, SKILL, "t/skill/SKILL.md")
+        assert any(i.check == "invalid_effort" for i in issues)
+
+    def test_skill_effort_optional(self):
+        fm = {"name": "sk", "description": "Desc"}
+        issues = validate_frontmatter(fm, SKILL, "t/skill/SKILL.md")
+        assert not any(i.check == "missing_field" and "effort" in i.message for i in issues)
+
+    def test_project_agent_valid_effort(self):
+        for level in ("low", "medium", "high", "max"):
+            fm = {"name": "ag", "description": "Desc", "effort": level}
+            issues = validate_frontmatter(fm, PROJECT_AGENT, ".claude/agents/ag.md")
+            assert not any(i.check == "invalid_effort" for i in issues), f"effort={level} should be valid"
+            assert not any(i.check == "unexpected_field" and "effort" in i.message for i in issues)
+
+    def test_project_agent_invalid_effort(self):
+        fm = {"name": "ag", "description": "Desc", "effort": "turbo"}
+        issues = validate_frontmatter(fm, PROJECT_AGENT, ".claude/agents/ag.md")
+        assert any(i.check == "invalid_effort" for i in issues)
+
+    def test_skill_agent_valid_effort(self):
+        for level in ("low", "medium", "high", "max"):
+            fm = {"name": "sa", "description": "D", "tools": "R", "model": "haiku", "effort": level}
+            issues = validate_frontmatter(fm, SKILL_AGENT, "t/skill/agents/sa.md")
+            assert not any(i.check == "invalid_effort" for i in issues), f"effort={level} should be valid"
+            assert not any(i.check == "unexpected_field" and "effort" in i.message for i in issues)
+
+    def test_skill_agent_invalid_effort(self):
+        fm = {"name": "sa", "description": "D", "tools": "R", "model": "haiku", "effort": "none"}
+        issues = validate_frontmatter(fm, SKILL_AGENT, "t/skill/agents/sa.md")
+        assert any(i.check == "invalid_effort" for i in issues)
+
     def test_reference_no_issues(self):
         assert validate_frontmatter(None, REFERENCE, "t/skill/reference/r.md") == []
 
