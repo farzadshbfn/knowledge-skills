@@ -525,5 +525,109 @@ class TestGraphExclusion:
         assert any("tools/index.md" in nid for nid in ids)
         assert any("editors.md" in nid for nid in ids)
 
+# ---------------------------------------------------------------------------
+# Skill nodes in graph
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def skill_project(tmp_path_factory):
+    """Project with a skill folder for skill-node graph testing."""
+    tmp_path = tmp_path_factory.mktemp("skill_graph")
+    config_dir = tmp_path / ".claude" / "knowledge-base"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "core", "path": "./knowledge"}]
+    }))
+    core = tmp_path / "knowledge"
+    (core / "learn" / "skill" / "agents").mkdir(parents=True)
+    (core / "learn" / "skill" / "reference").mkdir(parents=True)
+    (core / "index.md").write_text(
+        "---\nname: Root\ndescription: Root\n---\n\n- [Learn](learn/index.md)\n"
+    )
+    (core / "learn" / "index.md").write_text(
+        "---\nname: Learn\ndescription: Learning topic\n---\n\n"
+        "- [Skill](skill/SKILL.md)\n- [Note](note.md)\n"
+    )
+    (core / "learn" / "note.md").write_text(
+        "---\nname: Learn Note\ndescription: A concept note\n---\n\nContent.\n"
+    )
+    (core / "learn" / "skill" / "SKILL.md").write_text(
+        "---\nname: kb-learn\ndescription: Learn skill\n---\n\n"
+        "See [scouter](agents/scouter.md) and [workflow](reference/workflow.md).\n"
+    )
+    (core / "learn" / "skill" / "agents" / "scouter.md").write_text(
+        "---\nname: scouter\ndescription: KB scout\ntools: Read\nmodel: haiku\n---\n\nAgent.\n"
+    )
+    (core / "learn" / "skill" / "reference" / "workflow.md").write_text(
+        "# Workflow\n\nSteps here.\n"
+    )
+    return tmp_path
+
+
+class TestSkillNodesInGraph:
+    def test_skill_files_included(self, skill_project):
+        config = load_config(str(skill_project))
+        g = build_graph(str(skill_project), config)
+        ids = {n["id"] for n in g["nodes"]}
+        assert any("skill/SKILL.md" in nid for nid in ids)
+        assert any("skill/agents/scouter.md" in nid for nid in ids)
+
+    def test_skill_nodes_have_skill_in_folder(self, skill_project):
+        config = load_config(str(skill_project))
+        g = build_graph(str(skill_project), config)
+        skill_nodes = [n for n in g["nodes"] if "/skill/" in n["id"]]
+        assert len(skill_nodes) >= 2
+        for n in skill_nodes:
+            assert "skill" in n["folder"]
+
+    def test_skill_and_topic_share_same_kb(self, skill_project):
+        config = load_config(str(skill_project))
+        g = build_graph(str(skill_project), config)
+        by_name = {n["name"]: n for n in g["nodes"]}
+        assert by_name["kb-learn"]["kb"] == by_name["Learn"]["kb"]
+
+
+class TestSkillGraphJS:
+    def _get_js(self, server):
+        with urllib.request.urlopen(f"{server}/graph.js", timeout=5) as resp:
+            return resp.read().decode()
+
+    def test_has_skill_node_detection(self, graph_server):
+        js = self._get_js(graph_server)
+        assert "isSkillNode" in js
+        assert "isMainSkillNode" in js
+
+    def test_has_skill_icon_rendering(self, graph_server):
+        js = self._get_js(graph_server)
+        assert "mm-skill-icon" in js
+        assert "scroll-text" in js.lower() or "M15 12h-5" in js
+
+    def test_skill_icon_paths_present(self, graph_server):
+        js = self._get_js(graph_server)
+        # All four scroll-text SVG paths
+        assert "M15 12h-5" in js
+        assert "M15 8h-5" in js
+        assert "M19 17V5a2 2 0 0 0-2-2H4" in js
+        assert "M8 21h12a2 2 0 0 2-2v-1" in js or "M8 21h12a2 2 0 0 0 2-2v-1" in js
+
+    def test_skill_parent_folder_for_shared_hue(self, graph_server):
+        js = self._get_js(graph_server)
+        assert "skillParentFolder" in js
+        assert '/skill' in js
+
+    def test_main_skill_node_always_visible(self, graph_server):
+        js = self._get_js(graph_server)
+        # zoomOpacity and zoomNodeFade should return 1 for main skill nodes
+        assert "isMainSkillNode(d)" in js
+        assert '/skill/SKILL.md"' in js or "/skill/SKILL.md" in js
+
+    def test_skill_icon_scales_on_hover(self, graph_server):
+        js = self._get_js(graph_server)
+        # activateNode should rescale skill icons
+        assert "mm-skill-icon" in js
+        # deactivateAll should reset skill icon scale
+        assert "Reset skill icon scale" in js or "mm-skill-icon" in js
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

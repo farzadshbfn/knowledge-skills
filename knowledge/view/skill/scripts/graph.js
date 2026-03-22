@@ -244,8 +244,21 @@ function renderGraph() {
     return h;
   }
 
+  function skillParentFolder(folder) {
+    const idx = folder.indexOf("/skill");
+    return idx >= 0 ? folder.slice(0, idx) : null;
+  }
+
   function nodeColor(d) {
     const base = kbHue(d.kb);
+    const parent = skillParentFolder(d.folder);
+    if (parent !== null) {
+      // Skill nodes share hue with parent topic folder, vary lightness by depth
+      const offset = (((folderHash(parent) % 40) + 40) % 40) - 20;
+      const skillDepth = d.folder.slice(parent.length).split("/").filter(Boolean).length;
+      const light = Math.min(45 + skillDepth * 8, 70);
+      return `hsl(${base + offset}, 75%, ${light}%)`;
+    }
     const offset = (((folderHash(d.folder) % 40) + 40) % 40) - 20;
     const depth = d.folder.split("/").filter(Boolean).length;
     const light = Math.min(55 + depth * 5, 75);
@@ -402,6 +415,33 @@ function renderGraph() {
     .attr("stroke", d => d3.color(nodeColor(d)).darker(0.5))
     .attr("stroke-width", 1.5);
 
+  // --- Skill icon (scroll-text) for nodes inside /skill/ folders ---
+  function isSkillNode(d) { return d.id.includes("/skill/"); }
+  function isMainSkillNode(d) { return d.id.endsWith("/skill/SKILL.md"); }
+
+  graphNodes.filter(isSkillNode).each(function(d) {
+    const g = d3.select(this);
+    const iconScale = d.radius / 14; // 24px icon viewBox, fit inside radius
+    const icon = g.append("g")
+      .attr("class", "mm-skill-icon")
+      .attr("transform", `scale(${iconScale}) translate(-12, -12)`);
+    const strokeColor = d3.color(nodeColor(d)).darker(1.2).formatRgb();
+    icon.selectAll("path")
+      .data([
+        "M15 12h-5",
+        "M15 8h-5",
+        "M19 17V5a2 2 0 0 0-2-2H4",
+        "M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3",
+      ])
+      .join("path")
+      .attr("d", p => p)
+      .attr("fill", "none")
+      .attr("stroke", strokeColor)
+      .attr("stroke-width", 2)
+      .attr("stroke-linecap", "round")
+      .attr("stroke-linejoin", "round");
+  });
+
   graphLabels = graphNodes.append("text")
     .attr("class", "mm-label")
     .attr("dy", d => d.radius + 14)
@@ -455,6 +495,7 @@ function renderGraph() {
   }
 
   function zoomOpacity(d) {
+    if (isMainSkillNode(d)) return 1; // always visible
     const fc = graphConfig.fadeCoef;
     if (fc === 0) return 1;
     const importance = Math.sqrt(d.connections) / Math.sqrt(graphMaxConn);
@@ -464,6 +505,7 @@ function renderGraph() {
   }
 
   function zoomNodeFade(d) {
+    if (isMainSkillNode(d)) return 1; // always visible
     const fc = graphConfig.fadeCoef;
     if (fc === 0) return 1;
     const importance = Math.sqrt(d.connections) / Math.sqrt(graphMaxConn);
@@ -491,6 +533,13 @@ function renderGraph() {
       const t = hoverBoost(d, zoomNodeFade(d));
       const borderT = Math.min(1, t + 0.25);
       return desaturate(d3.color(nodeColor(d)).darker(0.5).formatRgb(), borderT);
+    });
+    // Update skill icon colors to match node saturation
+    graphNodeGroup.selectAll(".mm-skill-icon").each(function() {
+      const d = d3.select(this.parentNode).datum();
+      const t = hoverBoost(d, zoomNodeFade(d));
+      const iconColor = desaturate(d3.color(nodeColor(d)).darker(1.2).formatRgb(), t);
+      d3.select(this).selectAll("path").attr("stroke", iconColor);
     });
     const edgeFade = Math.max(0.3, Math.min(0.8, (graphCurrentZoom - 0.1) / 1.5));
     const active = activeNode();
@@ -534,6 +583,13 @@ function renderGraph() {
       if (nd === d) return nd.radius * 1.3;
       return nd.radius;
     });
+    // Scale skill icons with enlarged nodes
+    graphNodeGroup.selectAll(".mm-skill-icon").each(function() {
+      const nd = d3.select(this.parentNode).datum();
+      const r = nd === d ? nd.radius * 1.3 : nd.radius;
+      const s = r / 14;
+      d3.select(this).attr("transform", `scale(${s}) translate(-12, -12)`);
+    });
     updateGraphVisuals();
     if (graphFlowRAF) cancelAnimationFrame(graphFlowRAF);
     graphFlowRAF = null;
@@ -546,6 +602,12 @@ function renderGraph() {
     graphEdgeOverlays.attr("opacity", 0)
       .attr("stroke-dasharray", null).attr("stroke-dashoffset", null);
     graphCircles.attr("filter", null).attr("r", d => d.radius);
+    // Reset skill icon scale
+    graphNodeGroup.selectAll(".mm-skill-icon").each(function() {
+      const nd = d3.select(this.parentNode).datum();
+      const s = nd.radius / 14;
+      d3.select(this).attr("transform", `scale(${s}) translate(-12, -12)`);
+    });
     // Restore DOM order
     graphZoomLayer.selectAll(".mm-edge").each(function() {
       if (this.parentNode !== graphEdgeGroup.node()) graphEdgeGroup.node().appendChild(this);
