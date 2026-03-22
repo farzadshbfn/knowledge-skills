@@ -7,7 +7,7 @@ hooks:
     - matcher: "Write|Edit|Bash"
       hooks:
         - type: command
-          command: "uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --hook"
+          command: "uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --hook"
 ---
 
 # /kb-compact
@@ -50,7 +50,7 @@ After all agents complete: present combined summary (files processed/moved/merge
 After completing KB changes, run the validator to catch broken links, frontmatter issues, and structural errors:
 
 ```bash
-uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json
+uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --quiet --json
 ```
 
 Fix any reported errors before finishing.

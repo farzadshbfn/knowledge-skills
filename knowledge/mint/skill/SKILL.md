@@ -8,7 +8,7 @@ hooks:
     - matcher: "Write|Edit|Bash"
       hooks:
         - type: command
-          command: "uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --hook"
+          command: "uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --hook"
 ---
 
 # /kb-mint — KB-to-Skill-to-Plugin Pipeline
@@ -30,7 +30,7 @@ Convert a KB concept topic into a KB-backed skill.
 2. **Assess**: Classify per [reference/skill-conversion-guide.md](reference/skill-conversion-guide.md) (what/where/when → `index.md`, how → `skill/`, data → `reference/`, templates → `assets/`, automation → `scripts/`)
 3. **Author**: If `/skill-creator` is available in the environment, delegate skill creation to it. Otherwise, follow [reference/skill-authoring-guide.md](reference/skill-authoring-guide.md) for description writing, workflow patterns, token efficiency
 4. **Present plan** → ask for approval
-5. **Execute**: Scaffold from [assets/skill-scaffold/SKILL.md.template](assets/skill-scaffold/SKILL.md.template), slim `index.md`, create symlink (`ln -s ../../knowledge/<topic>/skill .claude/skills/<name>`), validate (`uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json`)
+5. **Execute**: Scaffold from [assets/skill-scaffold/SKILL.md.template](assets/skill-scaffold/SKILL.md.template), slim `index.md`, create symlink (`ln -s ../../knowledge/<topic>/skill .claude/skills/<name>`), validate (`uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --quiet --json`)
 6. **Records**: Prepend `knowledge/CHANGELOG.md` (`[maintenance]`). If from monitoring, return control.
 
 ## 3. Plugin Packaging (`--plugin`)
@@ -50,7 +50,7 @@ Run Section 3 first, then add Cowork-specific considerations per [reference/plug
 After completing KB or skill changes, run the validator to catch broken links, frontmatter issues, and structural errors:
 
 ```bash
-uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json
+uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --quiet --json
 ```
 
 Fix any reported errors before finishing.

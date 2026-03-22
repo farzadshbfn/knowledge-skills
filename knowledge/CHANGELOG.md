@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-22 -- [fix] Fix CLAUDE_SKILL_DIR cross-skill paths
+
+Replaced `../../learn/skill/` and `../../find/skill/` patterns with
+`../kb-learn/` and `../kb-find/` — matching the actual sibling names
+under `.claude/skills/`.
+
+UPDATE: learn/skill/SKILL.md
+UPDATE: mint/skill/SKILL.md
+UPDATE: mint/skill/reference/skill-conversion-guide.md
+UPDATE: compact/skill/SKILL.md
+
 ## 2026-03-22 -- [config] Set effort levels for skills and challenger agent
 
 Assigned effort levels across all skills and the challenger agent based on

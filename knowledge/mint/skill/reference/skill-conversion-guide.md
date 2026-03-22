@@ -51,7 +51,7 @@ Scan `skill/` for links outside the folder (break on distribution):
 
 1. Symlink: `ln -s ../../knowledge/<topic>/skill .claude/skills/<name>`
 2. Skill exclusivity: only `index.md` outside `skill/` — move other `.md` files in
-3. Validate: `uv run ${CLAUDE_SKILL_DIR}/../../learn/skill/scripts/validate_kb.py --quiet --json`
+3. Validate: `uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/validate_kb.py --quiet --json`
 4. Prepend CHANGELOG.md (`[maintenance]`)
 5. If from monitoring: return control for memory update
 

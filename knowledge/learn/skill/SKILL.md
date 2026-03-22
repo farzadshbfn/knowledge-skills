@@ -77,7 +77,7 @@ All KB discovery goes through the [scouter agent](agents/scouter.md). Never use 
 
 ### How to spawn scouters
 
-1. Read the kb-find SKILL.md at `${CLAUDE_SKILL_DIR}/../../find/skill/SKILL.md`
+1. Read the kb-find SKILL.md at `${CLAUDE_SKILL_DIR}/../kb-find/SKILL.md`
 2. Build prompt: scouter body text (after frontmatter) + separator + full kb-find SKILL.md content
 3. Spawn Agent with `model: haiku`, `background: true`
 
