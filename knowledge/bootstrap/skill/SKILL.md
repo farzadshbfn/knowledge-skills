@@ -2,6 +2,7 @@
 name: kb-bootstrap
 description: Sets up the knowledge base for a project. Creates the KB config, directory structure, and appends minimal instructions to the project's CLAUDE.md. Run this once when first using KB skills in a new project.
 argument-hint: "[kb-path]"
+effort: low
 ---
 
 # /kb-bootstrap — KB Setup

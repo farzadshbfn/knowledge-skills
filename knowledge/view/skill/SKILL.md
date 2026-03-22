@@ -2,6 +2,7 @@
 name: kb-view
 description: Opens the KB viewer in the browser. Starts a local HTTP server that renders all configured knowledge bases with working links, fuzzy search, and knowledge graph visualization.
 user-invocable: true
+effort: low
 ---
 
 # /kb-view — KB Viewer

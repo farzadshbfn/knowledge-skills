@@ -2,6 +2,7 @@
 name: kb-monitor
 description: Monitors KB usage patterns and skill health. Activates when KB access tracking detects frequently-read content that could become a skill, or when user corrections suggest a skill is underperforming. Also triggers on `this isn't working right`, `this skill keeps getting X wrong`, `convert this to a skill`, or `what should become a skill`. Tracks cross-session observations via memory.
 argument-hint: "[--status | --convert <topic-path> | --health <skill-name>]"
+effort: low
 ---
 
 # /kb-monitor — KB Usage Monitoring & Skill Gardening

@@ -2,6 +2,7 @@
 name: kb-find
 description: Read-only KB discovery with progressive 4-tier loading and --challenge mode for counter-evidence.
 argument-hint: "<query> [--challenge]"
+effort: medium
 ---
 
 # /kb-find

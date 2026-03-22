@@ -2,7 +2,8 @@
 name: challenger
 description: Adversarial web research agent — actively searches for counter-evidence, alternative explanations, and edge cases that challenge claims. Invoked by kb-learn orchestrator after scouter/searcher run.
 tools: Read, Bash, Glob, Grep, WebSearch, WebFetch
-model: sonnet
+model: opus
+effort: max
 background: true
 ---
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-22 -- [config] Set effort levels for skills and challenger agent
+
+Assigned effort levels across all skills and the challenger agent based on
+their complexity and quality requirements.
+
+UPDATE: learn/skill/SKILL.md (medium)
+UPDATE: find/skill/SKILL.md (medium)
+UPDATE: learn/skill/agents/challenger.md (opus, max)
+UPDATE: monitor/skill/SKILL.md (low)
+UPDATE: view/skill/SKILL.md (low)
+UPDATE: bootstrap/skill/SKILL.md (low)
+UPDATE: mint/skill/SKILL.md (max)
+
 ## 2026-03-22 -- [feat] Improve kb-learn content reliability
 
 Added challenger agent for adversarial web research against claims (topic workflow).

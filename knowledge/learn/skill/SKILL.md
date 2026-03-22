@@ -2,6 +2,7 @@
 name: kb-learn
 description: "Manages a personal knowledge base with learning tracking. Modes: (1) learn from articles, (2) learn about topics, (3) fix errors. Uses markdown links with relative paths for cross-references. Maintains a rolling changelog, validates links, and keeps a markdown-compatible knowledge base. When a note reaches ~500 lines, suggests /kb-compact."
 argument-hint: "<article|topic|fix> [url-or-text|topic-name|description]"
+effort: medium
 hooks:
   PostToolUse:
     - matcher: "Write|Edit|Bash"
