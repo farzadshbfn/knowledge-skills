@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-22 -- [feat] Improve kb-learn content reliability
+
+Added challenger agent for adversarial web research against claims (topic workflow).
+Lowered assessor trigger threshold to always run for any non-KNOWN claims. Added
+corroboration requirement (2+ independent sources for CONFIRMED/LIKELY verdicts).
+Introduced per-claim inline confidence markers (`<conf:high>`, `<conf:medium>`,
+`<conf:low>`) with validator support. Untagged claims are treated as medium
+confidence. Approval flow now separates low-confidence claims and excludes
+them by default.
+
+CREATE: learn/skill/agents/challenger.md
+UPDATE: learn/skill/agents/assessor.md
+UPDATE: learn/skill/agents/searcher.md
+UPDATE: learn/skill/SKILL.md
+UPDATE: learn/skill/reference/article-workflow.md
+UPDATE: learn/skill/reference/topic-workflow.md
+UPDATE: learn/skill/assets/topic-note.md
+UPDATE: learn/skill/scripts/validate_kb.py
+
 ## 2026-03-19 -- [feat] Add resolve_skill_paths script and restart hint
 
 Added bootstrap/scripts/resolve_skill_paths.py to locate installed skills

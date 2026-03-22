@@ -48,6 +48,7 @@ Specialized agents isolate high-volume work and enable parallelism. SKILL.md is 
 |-------|-------|---------|---------|
 | [scouter](agents/scouter.md) | haiku | KB discovery via `/kb-find` (supports `--challenge`) | all workflows |
 | [searcher](agents/searcher.md) | sonnet | Web research — search, fetch, structure findings | topic, article |
+| [challenger](agents/challenger.md) | sonnet | Adversarial web research — finds counter-evidence | topic |
 | [assessor](agents/assessor.md) | opus | Evaluate claims against KB + web evidence | article, topic |
 
 ### Orchestration Pipeline
@@ -57,13 +58,14 @@ Specialized agents isolate high-volume work and enable parallelism. SKILL.md is 
    ├── scouter (normal) → supporting evidence
    ├── scouter (challenge) → counter-evidence
    └── searcher → web findings
-2. Spawn assessor (with all evidence) → verdicts + KB impact
-3. Apply changes
+2. Spawn challenger (with claims from step 1) → counter-evidence from web
+3. Spawn assessor (with all evidence incl. challenger) → verdicts + KB impact
+4. Apply changes
 ```
 
 Not all steps required every time:
-- **Simple article**: single scouter, no assessor
-- **Complex topic**: full pipeline
+- **Article**: scouter(s) + searcher → assessor (no challenger)
+- **Topic**: full pipeline including challenger
 - **Fix**: single scouter, no web search
 
 Use agents when output is high-volume, work is parallelizable, or task benefits from model specialization. Use inline when KB is small, single simple claim, or latency matters.
@@ -111,6 +113,7 @@ After loading KB, check for concept evolution — outdated terminology, framing,
 2. **Slim frontmatter**:
    <!-- CANONICAL: Note format (frontmatter, TOC). Other files reference this section, not restate it. -->
    - Topic/index notes: only `name` + `description` in frontmatter. No `title`, `summary`, `confidence`, `tags`.
+   - Inline `<conf:high>`, `<conf:medium>`, `<conf:low>` markers on claims are allowed and preserved during edits. Claims without a confidence tag should be treated as `<conf:medium>` (unverified but not flagged).
    - Body: `# {Title}` → content sections. No summary paragraph duplicating description.
    - **TOC**: Notes >100 lines need `## Contents` in first 10 lines of body.
    - Legacy notes: `name` (append " (legacy)") + `description` (mention replacement).
@@ -139,7 +142,7 @@ Run after any KB update. Reuse KB root listing from step 5 if available; otherwi
 
 ## 5. Shared Procedure: User Approval
 
-Before non-trivial KB changes, present summary: notes to create, modify, index updates, changelog entry. Use the **AskUserQuestion tool** (not plain text) with options: "Apply all", "Apply selectively", "Cancel".
+Before non-trivial KB changes, present summary: notes to create, modify, index updates, changelog entry. Group claims by confidence level. Show `<conf:low>` claims in a separate "⚠ Low confidence" section. Use the **AskUserQuestion tool** (not plain text) with options: "Apply high/medium confidence", "Apply all (including low confidence)", "Apply selectively", "Cancel".
 
 **Exception**: Minor changes (adding source URL, fixing typo) may proceed without approval but must be mentioned.
 

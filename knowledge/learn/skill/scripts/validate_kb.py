@@ -636,6 +636,33 @@ def check_changelog(
     return issues
 
 
+_VALID_CONF_TAGS = {"<conf:high>", "<conf:medium>", "<conf:low>"}
+_CONF_TAG_RE = re.compile(r"<conf:[^>]*>")
+
+
+def check_confidence_tags(files: dict[str, str]) -> list[Issue]:
+    """Validate inline confidence tags in topic notes."""
+    issues: list[Issue] = []
+    for rel_path, content in files.items():
+        if classify_file(rel_path) != TOPIC:
+            continue
+        for match in _CONF_TAG_RE.finditer(content):
+            tag = match.group(0)
+            if tag not in _VALID_CONF_TAGS:
+                issues.append(Issue(
+                    "error", "invalid_conf_tag", rel_path,
+                    f"Malformed confidence tag: {tag}",
+                    "valid tags: <conf:high>, <conf:medium>, <conf:low>",
+                ))
+            elif tag == "<conf:low>":
+                issues.append(Issue(
+                    "warning", "low_confidence", rel_path,
+                    "Low-confidence claim present",
+                    f"found {tag} — consider verifying or removing",
+                ))
+    return issues
+
+
 # Filesystem protocol (enables mocking)
 
 class FileSystem(Protocol):
@@ -760,6 +787,7 @@ def validate_kb(
     result.issues.extend(check_skill_scope(all_files))
     result.issues.extend(check_missing_index(all_files))
     result.issues.extend(check_index_coverage(all_files))
+    result.issues.extend(check_confidence_tags(all_files))
 
     return result
 

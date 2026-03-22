@@ -37,13 +37,13 @@ Spawn a [scouter](../agents/scouter.md) in normal mode with extracted claims/key
 
 Author opinions tagged separately. After classification, compare terminology against KB — newer terms for existing concepts = EVOLVED, not PARTIAL.
 
-### 4a. Deep Assessment (Optional)
+### 4a. Deep Assessment
 
-For **5+ non-KNOWN claims**: if only normal scouter was spawned, add a challenge-mode scouter. Then spawn [assessor](../agents/assessor.md) with claims + KB findings. Assessor produces per-claim verdicts. Skip for few claims or small KB.
+For **any non-KNOWN claims**: if only normal scouter was spawned, add a challenge-mode scouter. Then spawn [assessor](../agents/assessor.md) with claims + KB findings. Assessor produces per-claim verdicts.
 
 ### 5. Present the Diff
 
-Show structured comparison: already known (with links), partially covered (what's new), new information, author opinions (unverified), evolution detected (old→new term), and proposed KB changes (CREATE/UPDATE/EVOLVE with paths). Include source URL, date, and claim counts.
+Show structured comparison: already known (with links), partially covered (what's new), new information, author opinions (unverified), evolution detected (old→new term), and proposed KB changes (CREATE/UPDATE/EVOLVE with paths). Include source URL, date, and claim counts. Separate `<conf:low>` claims visually — prefix with ⚠ and note they will be excluded by default.
 
 ### 6. Await Approval
 
@@ -53,7 +53,7 @@ Use SKILL.md shared approval procedure. User may approve all, approve selectivel
 
 Check for `skill/` subfolder first (SKILL.md §4 step 0a) — route "how" content to skill, keep concept notes lightweight.
 
-1. **New notes**: Use `assets/topic-note.md`. Set `name`/`description`. Add cross-references. Add `## References` with article URL. Add `## Contents` if >100 lines.
-2. **Updated notes**: Add sections/details. Keep frontmatter accurate. Add links and references. Add `## Contents` if >100 lines and missing.
+1. **New notes**: Use `assets/topic-note.md`. Set `name`/`description`. Add cross-references. Add `## References` with article URL. Add `## Contents` if >100 lines. Append the assessor's confidence tag (`<conf:high>`, `<conf:medium>`, `<conf:low>`) inline after each claim.
+2. **Updated notes**: Add sections/details. Keep frontmatter accurate. Add links and references. Add `## Contents` if >100 lines and missing. Append confidence tags to new claims. Preserve existing tags on unchanged claims.
 3. **Evolved concepts**: Follow [evolution-workflow.md](evolution-workflow.md) for callouts, cross-links, legacy notes.
 4. **Index notes**: Update/create indexes. Use table format when 3+ items (see [folder-structure.md](folder-structure.md)).
