@@ -45,6 +45,45 @@ def load_config(project_root: str) -> dict:
         return json.load(f)
 
 
+def _resolve_home(path: str) -> str:
+    if path.startswith("~/"):
+        return str(Path.home() / path[2:])
+    return path
+
+
+def load_global_config() -> dict | None:
+    """Load global KB config (~/.claude/knowledge-base/config.json).
+
+    Returns merged kb_roots with absolute paths and readonly/global markers,
+    or None if no global config exists.
+    """
+    global_path = Path.home() / ".claude" / "knowledge-base" / "config.json"
+    if not global_path.exists():
+        return None
+    with open(global_path, encoding="utf-8") as f:
+        data = json.load(f)
+    namespace = data.get("namespace", "")
+    source = data.get("source", "")
+    if not source:
+        return None
+    source = _resolve_home(source)
+    source_config_path = Path(source) / ".claude" / "knowledge-base" / "config.json"
+    if not source_config_path.exists():
+        return None
+    with open(source_config_path, encoding="utf-8") as f:
+        source_data = json.load(f)
+    entries = []
+    for e in source_data.get("kb_roots", []):
+        name = f"{namespace}.{e['name']}" if namespace else e["name"]
+        kb_path = e["path"]
+        if kb_path.startswith("./"):
+            kb_path = f"{source}/{kb_path[2:]}"
+        elif not kb_path.startswith("/"):
+            kb_path = f"{source}/{kb_path}"
+        entries.append({"name": name, "path": kb_path, "readonly": True})
+    return {"namespace": namespace, "kb_roots": entries}
+
+
 def resolve_kb_path(config: dict, kb_name: str) -> str | None:
     """Get filesystem path for a named KB."""
     for entry in config.get("kb_roots", []):
@@ -140,11 +179,20 @@ def fuzzy_match(query: str, candidate: str) -> int | None:
     return best
 
 
-def is_safe_path(project_root: str, rel_path: str) -> bool:
-    """Check that a relative path doesn't escape the project root."""
-    full = (Path(project_root) / rel_path).resolve()
+def is_safe_path(project_root: str, rel_path: str, allowed_roots: list[str] | None = None) -> bool:
+    """Check that a path is within the project root or an allowed global KB root."""
+    if Path(rel_path).is_absolute():
+        resolved = Path(rel_path).resolve()
+    else:
+        resolved = (Path(project_root) / rel_path).resolve()
     root = Path(project_root).resolve()
-    return str(full).startswith(str(root))
+    if str(resolved).startswith(str(root)):
+        return True
+    for extra in (allowed_roots or []):
+        extra_resolved = Path(extra).resolve()
+        if str(resolved).startswith(str(extra_resolved)):
+            return True
+    return False
 
 
 def build_graph(project_root: str, config: dict) -> dict:
@@ -243,6 +291,8 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
     project_root: str = ""
     viewer_dir: str = ""
     kb_config: dict = {}
+    global_config: dict | None = None
+    _global_roots: list[str] = []  # absolute paths of global KB roots
     _config_mtime: float = 0.0
 
     def do_GET(self):
@@ -325,11 +375,14 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
 
     def _serve_file(self, rel_path: str):
         """Serve a markdown file with parsed frontmatter."""
-        if not is_safe_path(self.project_root, rel_path):
+        if not is_safe_path(self.project_root, rel_path, self._global_roots):
             self._error(403, "Path traversal not allowed")
             return
 
-        full_path = Path(self.project_root) / rel_path
+        if Path(rel_path).is_absolute():
+            full_path = Path(rel_path)
+        else:
+            full_path = Path(self.project_root) / rel_path
         if not full_path.exists():
             self._error(404, f"File not found: {rel_path}")
             return
@@ -339,7 +392,14 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
         meta, body = strip_frontmatter(content)
         body = resolve_cross_kb_links(body, config)
 
-        response = json.dumps({"path": rel_path, "meta": meta, "body": body})
+        is_global = any(
+            str(full_path.resolve()).startswith(str(Path(r).resolve()))
+            for r in self._global_roots
+        )
+        result: dict[str, Any] = {"path": rel_path, "meta": meta, "body": body}
+        if is_global:
+            result["readonly"] = True
+        response = json.dumps(result)
         self._respond(200, response, "application/json")
 
     def _serve_config(self):
@@ -356,18 +416,33 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
         """Fuzzy search across all KB notes (name + description)."""
         config = self._reload_config()
         hits: list[dict] = []
-        for entry in config.get("kb_roots", []):
-            kb_path = Path(self.project_root) / entry["path"]
-            topics = kb_path 
-            if not topics.is_dir():
+
+        # Merge project and global KB entries for search
+        all_entries = list(config.get("kb_roots", []))
+        if self.global_config:
+            all_entries.extend(self.global_config.get("kb_roots", []))
+
+        for entry in all_entries:
+            is_global = entry.get("readonly", False)
+            kb_path_str = entry["path"]
+            if Path(kb_path_str).is_absolute():
+                kb_path = Path(kb_path_str)
+            else:
+                kb_path = Path(self.project_root) / kb_path_str
+            if not kb_path.is_dir():
                 continue
-            for md in topics.rglob("*.md"):
+            for md in kb_path.rglob("*.md"):
                 if _should_skip(md, kb_path):
                     continue
                 # Skip skill internals
-                rel = str(md.relative_to(Path(self.project_root)))
-                if "/skill/" in rel and not rel.endswith("/skill/SKILL.md"):
+                rel_to_kb = str(md.relative_to(kb_path))
+                if "/skill/" in rel_to_kb and not rel_to_kb.endswith("/skill/SKILL.md"):
                     continue
+                # Use absolute path for global, relative for local
+                if is_global:
+                    file_path = str(md)
+                else:
+                    file_path = str(md.relative_to(Path(self.project_root)))
                 try:
                     content = md.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
@@ -385,14 +460,18 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
                     sort_key = s_name
                 else:
                     sort_key = 10000 + (s_desc or 0)
-                hits.append({
-                    "path": rel,
+                hit: dict[str, Any] = {
+                    "path": file_path,
                     "name": name,
                     "description": desc[:200],
                     "score": sort_key,
                     "kb": entry["name"],
-                })
-        hits.sort(key=lambda h: h["score"])
+                }
+                if is_global:
+                    hit["global"] = True
+                hits.append(hit)
+        # Sort: by score, then tie-break local before global
+        hits.sort(key=lambda h: (h["score"], 1 if h.get("global") else 0))
         self._respond(200, json.dumps({"query": query, "results": hits[:30]}),
                        "application/json")
 
@@ -457,9 +536,17 @@ def create_server(
     except OSError:
         mtime = 0.0
 
+    global_config = load_global_config()
+    global_roots = [
+        str(Path(e["path"]).resolve())
+        for e in (global_config or {}).get("kb_roots", [])
+    ]
+
     KBViewerHandler.project_root = project_root
     KBViewerHandler.viewer_dir = viewer_dir
     KBViewerHandler.kb_config = config
+    KBViewerHandler.global_config = global_config
+    KBViewerHandler._global_roots = global_roots
     KBViewerHandler._config_mtime = mtime
 
     http.server.ThreadingHTTPServer.allow_reuse_address = True

@@ -330,6 +330,15 @@ body {
   align-items: center;
   gap: 8px;
 }
+.search-result-tag-global {
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: auto;
+  white-space: nowrap;
+}
 .search-no-results {
   padding: 16px;
   text-align: center;
@@ -789,24 +798,25 @@ function collectNotes(data) {
   const notes = [];
   if (!data || !data.kbs) return notes;
   for (const kb of data.kbs) {
-    if (kb.tree) walkNode(kb.tree, kb.kb_name, notes);
+    const isGlobal = !!kb.readonly;
+    if (kb.tree) walkNode(kb.tree, kb.kb_name, isGlobal, notes);
   }
   return notes;
 }
 
-function walkNode(node, kbName, out) {
+function walkNode(node, kbName, isGlobal, out) {
   if (node.index) {
-    out.push({ ...node.index, kb: kbName });
+    out.push({ ...node.index, kb: kbName, global: isGlobal });
   }
   if (node.notes) {
-    for (const n of node.notes) out.push({ ...n, kb: kbName });
+    for (const n of node.notes) out.push({ ...n, kb: kbName, global: isGlobal });
   }
   if (node.skill) {
-    out.push({ ...node.skill, kb: kbName });
+    out.push({ ...node.skill, kb: kbName, global: isGlobal });
   }
   if (node.children) {
     for (const key of Object.keys(node.children)) {
-      walkNode(node.children[key], kbName, out);
+      walkNode(node.children[key], kbName, isGlobal, out);
     }
   }
 }
@@ -1376,7 +1386,8 @@ function doSearch() {
     scored.push({ ...note, gap: best.gap, sortKey, matchStart: best.start, matchEnd: best.end, bestField, bestText });
   }
 
-  scored.sort((a, b) => a.sortKey - b.sortKey);
+  // Sort by score, tie-break: local before global
+  scored.sort((a, b) => a.sortKey - b.sortKey || (a.global ? 1 : 0) - (b.global ? 1 : 0));
   const top = scored.slice(0, 25);
 
   resultsBody.innerHTML = "";
@@ -1401,9 +1412,11 @@ function doSearch() {
 
     const div = document.createElement("div");
     div.className = "search-result";
+    const globalTag = hit.global ? `<span class="search-result-tag-global">global</span>` : "";
     div.innerHTML = `
       <div class="search-result-top">
         <span class="search-result-name">${nameHtml}</span>
+        ${globalTag}
       </div>
       <span class="search-result-desc">${descHtml}</span>
       <span class="search-result-path">${esc(hit.path)}</span>
