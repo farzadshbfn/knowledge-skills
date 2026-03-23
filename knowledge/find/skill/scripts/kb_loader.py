@@ -424,9 +424,14 @@ def merge_configs(
         return project
     merged = list(project.entries)
     project_names = {e.name for e in project.entries}
+    project_paths = {str(Path(e.path).resolve()) for e in project.entries}
     for entry in global_.entries:
-        if entry.name not in project_names:
-            merged.append(entry)
+        # Skip if name collides or resolved path already in project
+        if entry.name in project_names:
+            continue
+        if str(Path(entry.path).resolve()) in project_paths:
+            continue
+        merged.append(entry)
     return KBConfig(entries=merged, namespace=project.namespace)
 
 

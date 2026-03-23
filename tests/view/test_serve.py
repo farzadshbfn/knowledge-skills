@@ -1082,8 +1082,9 @@ class TestConfigHotReload:
 
     def test_initial_config_has_one_kb(self, hot_reload_server):
         data = self._get(f"{hot_reload_server}/api/config")
-        assert len(data["kb_roots"]) == 1
-        assert data["kb_roots"][0]["name"] == "alpha"
+        local = [e for e in data["kb_roots"] if not e.get("readonly")]
+        assert len(local) == 1
+        assert local[0]["name"] == "alpha"
 
     def test_initial_graph_has_only_alpha(self, hot_reload_server):
         data = self._get(f"{hot_reload_server}/api/graph")

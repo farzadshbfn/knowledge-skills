@@ -894,6 +894,11 @@ function findKbForPath(path) {
   if (!kbConfig || !kbConfig.kb_roots) return null;
   for (const entry of kbConfig.kb_roots) {
     const norm = entry.path.replace(/^\.\//, "");
+    // Absolute paths (global KBs): match against absolute path prefix
+    if (path.startsWith("/") && entry.path.startsWith("/")) {
+      const absNorm = entry.path.replace(/\/$/, "");
+      if (path.startsWith(absNorm + "/")) return entry;
+    }
     if (path.startsWith(norm + "/") || path.startsWith("./" + norm + "/")) {
       return entry;
     }
@@ -905,7 +910,12 @@ function findKbForPath(path) {
 function toUrlPath(fsPath) {
   const kb = findKbForPath(fsPath);
   if (!kb) return fsPath;
-  const norm = kb.path.replace(/^\.\//, "");
+  const norm = kb.path.replace(/^\.\//, "").replace(/\/$/, "");
+  // Absolute path (global KB)
+  if (fsPath.startsWith("/") && kb.path.startsWith("/")) {
+    const absNorm = kb.path.replace(/\/$/, "");
+    if (fsPath.startsWith(absNorm + "/")) return kb.name + fsPath.slice(absNorm.length);
+  }
   if (fsPath.startsWith(norm + "/")) return kb.name + fsPath.slice(norm.length);
   if (fsPath.startsWith("./" + norm + "/")) return kb.name + fsPath.slice(norm.length + 2);
   return fsPath;

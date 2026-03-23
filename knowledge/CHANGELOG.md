@@ -8,8 +8,9 @@ KB project, reads its kb_roots at runtime. No duplication of KB root definitions
 
 - UPDATE: `bootstrap/skill/SKILL.md`
 - UPDATE: `find/skill/scripts/kb_loader.py` — load_global_config follows source reference
-- UPDATE: `view/skill/scripts/serve.py` — serve global KB files, tag search results
-- UPDATE: `view/skill/scripts/index.html` — global tag in search, local tie-breaking
+- UPDATE: `view/skill/scripts/serve.py` — serve global KB files, tag search results, dedup same-path entries
+- UPDATE: `view/skill/scripts/index.html` — global tag in search, local tie-breaking, absolute path URL mapping
+- UPDATE: `find/skill/scripts/kb_loader.py` — merge_configs deduplicates by resolved path
 
 ## 2026-03-23 14:26 -- [feature] Global read-only KB (god knowledge)
 

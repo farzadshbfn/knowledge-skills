@@ -404,7 +404,18 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
 
     def _serve_config(self):
         config = self._reload_config()
-        self._respond(200, json.dumps(config), "application/json")
+        # Merge global entries so frontend knows about all KBs for URL mapping
+        merged = dict(config)
+        merged["kb_roots"] = list(config.get("kb_roots", []))
+        if self.global_config:
+            # Skip global entries whose resolved path matches a local entry
+            local_paths = set()
+            for e in config.get("kb_roots", []):
+                local_paths.add(str((Path(self.project_root) / e["path"]).resolve()))
+            for ge in self.global_config.get("kb_roots", []):
+                if str(Path(ge["path"]).resolve()) not in local_paths:
+                    merged["kb_roots"].append(ge)
+        self._respond(200, json.dumps(merged), "application/json")
 
     def _serve_graph(self):
         """Return the file link graph for mind-map visualization."""
@@ -417,10 +428,15 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
         config = self._reload_config()
         hits: list[dict] = []
 
-        # Merge project and global KB entries for search
+        # Merge project and global KB entries for search (skip duplicated paths)
         all_entries = list(config.get("kb_roots", []))
         if self.global_config:
-            all_entries.extend(self.global_config.get("kb_roots", []))
+            local_paths = set()
+            for e in config.get("kb_roots", []):
+                local_paths.add(str((Path(self.project_root) / e["path"]).resolve()))
+            for ge in self.global_config.get("kb_roots", []):
+                if str(Path(ge["path"]).resolve()) not in local_paths:
+                    all_entries.append(ge)
 
         for entry in all_entries:
             is_global = entry.get("readonly", False)
