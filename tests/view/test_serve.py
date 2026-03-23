@@ -24,6 +24,7 @@ from serve import (
     fuzzy_match,
     is_safe_path,
     load_config,
+    load_global_config,
     resolve_cross_kb_links,
     resolve_kb_path,
     strip_frontmatter,
@@ -1174,6 +1175,341 @@ class TestConfigHotReload:
         }))
         data = self._get(f"{hot_reload_server}/api/graph")
         assert "beta" not in {n["kb"] for n in data["nodes"]}
+
+
+# ===================================================================
+# Unit tests: is_safe_path with allowed_roots (global KBs)
+# ===================================================================
+
+class TestIsSafePathGlobal:
+    def test_absolute_path_in_allowed_root(self, tmp_path):
+        root = str(tmp_path / "project")
+        global_kb = str(tmp_path / "global-kb")
+        (tmp_path / "global-kb").mkdir()
+        assert is_safe_path(root, f"{global_kb}/note.md", [global_kb]) is True
+
+    def test_absolute_path_outside_all_roots(self, tmp_path):
+        root = str(tmp_path / "project")
+        global_kb = str(tmp_path / "global-kb")
+        assert is_safe_path(root, "/etc/passwd", [global_kb]) is False
+
+    def test_no_allowed_roots_rejects_absolute(self, tmp_path):
+        root = str(tmp_path)
+        assert is_safe_path(root, "/some/absolute/path") is False
+
+    def test_relative_path_still_works_with_allowed_roots(self, tmp_path):
+        root = str(tmp_path)
+        assert is_safe_path(root, "knowledge/note.md", ["/other"]) is True
+
+    def test_traversal_not_saved_by_allowed_roots(self, tmp_path):
+        root = str(tmp_path / "project")
+        assert is_safe_path(root, "../../etc/passwd", ["/other"]) is False
+
+
+# ===================================================================
+# Unit tests: load_global_config (serve.py)
+# ===================================================================
+
+class TestLoadGlobalConfigServe:
+    def test_returns_none_when_no_global_config(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        assert load_global_config() is None
+
+    def test_returns_none_when_no_source(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        cfg_dir = tmp_path / ".claude" / "knowledge-base"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "config.json").write_text(json.dumps({"namespace": "god"}))
+        assert load_global_config() is None
+
+    def test_loads_source_config(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Create global config
+        cfg_dir = tmp_path / ".claude" / "knowledge-base"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "config.json").write_text(json.dumps({
+            "namespace": "god",
+            "source": str(tmp_path / "source-project"),
+        }))
+        # Create source project config
+        source_cfg = tmp_path / "source-project" / ".claude" / "knowledge-base"
+        source_cfg.mkdir(parents=True)
+        (source_cfg / "config.json").write_text(json.dumps({
+            "kb_roots": [{"name": "core", "path": "./knowledge"}]
+        }))
+        result = load_global_config()
+        assert result is not None
+        assert len(result["kb_roots"]) == 1
+        assert result["kb_roots"][0]["name"] == "god.core"
+        assert result["kb_roots"][0]["readonly"] is True
+        assert result["kb_roots"][0]["path"] == str(tmp_path / "source-project" / "knowledge")
+
+
+# ===================================================================
+# Integration tests: global KB in viewer
+# ===================================================================
+
+@pytest.fixture()
+def global_kb_project(tmp_path, monkeypatch):
+    """Project with local KB + a separate global KB directory."""
+    # Local project
+    config_dir = tmp_path / "project" / ".claude" / "knowledge-base"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "local", "path": "./knowledge"}]
+    }))
+    local_kb = tmp_path / "project" / "knowledge" / "topic"
+    local_kb.mkdir(parents=True)
+    (tmp_path / "project" / "knowledge" / "index.md").write_text(
+        "---\nname: Local Root\ndescription: Local KB root\n---\n\n# Local"
+    )
+    (local_kb / "index.md").write_text(
+        "---\nname: Local Topic\ndescription: A local topic\n---\n\n# Local Topic\n\nLocal content."
+    )
+
+    # Global KB (separate directory, its own config)
+    global_project = tmp_path / "god-kb"
+    global_cfg = global_project / ".claude" / "knowledge-base"
+    global_cfg.mkdir(parents=True)
+    (global_cfg / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "core", "path": "./knowledge"}]
+    }))
+    global_kb = global_project / "knowledge" / "shared"
+    global_kb.mkdir(parents=True)
+    (global_project / "knowledge" / "index.md").write_text(
+        "---\nname: God Root\ndescription: Global KB root\n---\n\n# God KB"
+    )
+    (global_kb / "index.md").write_text(
+        "---\nname: Shared Concepts\ndescription: Shared knowledge\n---\n\n# Shared\n\nGlobal content."
+    )
+
+    # Global reference config
+    home_cfg = tmp_path / "home" / ".claude" / "knowledge-base"
+    home_cfg.mkdir(parents=True)
+    (home_cfg / "config.json").write_text(json.dumps({
+        "namespace": "god",
+        "source": str(global_project),
+    }))
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+
+    return tmp_path / "project", global_project
+
+
+@pytest.fixture()
+def global_kb_server(global_kb_project):
+    """Server for a project with global KB."""
+    project_path, _ = global_kb_project
+    viewer_dir = str(
+        Path(__file__).resolve().parent.parent.parent
+        / "knowledge" / "view" / "skill" / "scripts"
+    )
+    server = create_server(0, str(project_path), viewer_dir)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{port}"
+    server.shutdown()
+
+
+class TestGlobalKB:
+    def _get(self, url):
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return json.loads(resp.read().decode())
+
+    # --- Config ---
+
+    def test_config_includes_global_entries(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/config")
+        names = {e["name"] for e in data["kb_roots"]}
+        assert "local" in names
+        assert "god.core" in names
+
+    def test_global_entries_marked_readonly(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/config")
+        global_entries = [e for e in data["kb_roots"] if e.get("readonly")]
+        assert len(global_entries) >= 1
+        assert all(e["name"].startswith("god.") for e in global_entries)
+
+    def test_local_entries_not_readonly(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/config")
+        local_entries = [e for e in data["kb_roots"] if not e.get("readonly")]
+        assert any(e["name"] == "local" for e in local_entries)
+
+    # --- File serving ---
+
+    def test_serve_global_file(self, global_kb_project, global_kb_server):
+        _, global_project = global_kb_project
+        abs_path = str(global_project / "knowledge" / "shared" / "index.md")
+        data = self._get(f"{global_kb_server}/api/file?path={urllib.parse.quote(abs_path)}")
+        assert data["meta"]["name"] == "Shared Concepts"
+        assert "Global content" in data["body"]
+
+    def test_global_file_marked_readonly(self, global_kb_project, global_kb_server):
+        _, global_project = global_kb_project
+        abs_path = str(global_project / "knowledge" / "shared" / "index.md")
+        data = self._get(f"{global_kb_server}/api/file?path={urllib.parse.quote(abs_path)}")
+        assert data.get("readonly") is True
+
+    def test_local_file_not_marked_readonly(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/file?path=knowledge/topic/index.md")
+        assert "readonly" not in data
+
+    def test_random_absolute_path_rejected(self, global_kb_server):
+        try:
+            self._get(f"{global_kb_server}/api/file?path=/etc/passwd")
+            assert False, "Should have raised"
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+
+    # --- Search ---
+
+    def test_search_includes_global_results(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/search?q=Shared")
+        names = {r["name"] for r in data["results"]}
+        assert "Shared Concepts" in names
+
+    def test_search_global_results_tagged(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/search?q=Shared")
+        global_hits = [r for r in data["results"] if r.get("global")]
+        assert len(global_hits) >= 1
+
+    def test_search_local_results_not_tagged_global(self, global_kb_server):
+        data = self._get(f"{global_kb_server}/api/search?q=Local")
+        local_hits = [r for r in data["results"] if r["name"] == "Local Topic"]
+        assert len(local_hits) >= 1
+        assert not any(r.get("global") for r in local_hits)
+
+    def test_search_tiebreak_local_before_global(self, global_kb_project, global_kb_server):
+        """When both local and global have the same score, local comes first."""
+        _, global_project = global_kb_project
+        # Add a note with same name to both KBs
+        (Path(str(global_kb_project[0])) / "knowledge" / "topic" / "shared-note.md").write_text(
+            "---\nname: Tiebreak Test\ndescription: Local version\n---\n\n# Local"
+        )
+        (global_project / "knowledge" / "shared" / "shared-note.md").write_text(
+            "---\nname: Tiebreak Test\ndescription: Global version\n---\n\n# Global"
+        )
+        data = self._get(f"{global_kb_server}/api/search?q=Tiebreak+Test")
+        ties = [r for r in data["results"] if r["name"] == "Tiebreak Test"]
+        assert len(ties) >= 2
+        # First result should be local (not global)
+        assert not ties[0].get("global")
+        assert ties[1].get("global")
+
+
+# ===================================================================
+# Integration tests: path deduplication (local == global path)
+# ===================================================================
+
+@pytest.fixture()
+def same_path_project(tmp_path, monkeypatch):
+    """Project where local KB path is the same as global KB path (self-referencing)."""
+    # The project IS the god KB
+    config_dir = tmp_path / "project" / ".claude" / "knowledge-base"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "core", "path": "./knowledge"}]
+    }))
+    kb = tmp_path / "project" / "knowledge" / "topic"
+    kb.mkdir(parents=True)
+    (tmp_path / "project" / "knowledge" / "index.md").write_text(
+        "---\nname: Root\ndescription: Root\n---\n\n# Root"
+    )
+    (kb / "index.md").write_text(
+        "---\nname: Topic\ndescription: A topic\n---\n\n# Topic\n\nContent."
+    )
+
+    # Global config points to the SAME project as source
+    home_cfg = tmp_path / "home" / ".claude" / "knowledge-base"
+    home_cfg.mkdir(parents=True)
+    (home_cfg / "config.json").write_text(json.dumps({
+        "namespace": "god",
+        "source": str(tmp_path / "project"),
+    }))
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    return tmp_path / "project"
+
+
+@pytest.fixture()
+def same_path_server(same_path_project):
+    viewer_dir = str(
+        Path(__file__).resolve().parent.parent.parent
+        / "knowledge" / "view" / "skill" / "scripts"
+    )
+    server = create_server(0, str(same_path_project), viewer_dir)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{port}"
+    server.shutdown()
+
+
+class TestPathDeduplication:
+    def _get(self, url):
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return json.loads(resp.read().decode())
+
+    def test_config_deduplicates_same_path(self, same_path_server):
+        """When local and global resolve to same path, global entry is dropped."""
+        data = self._get(f"{same_path_server}/api/config")
+        names = [e["name"] for e in data["kb_roots"]]
+        assert "core" in names
+        assert "god.core" not in names
+
+    def test_search_no_duplicates(self, same_path_server):
+        """Search should not return the same file twice."""
+        data = self._get(f"{same_path_server}/api/search?q=Topic")
+        topic_hits = [r for r in data["results"] if r["name"] == "Topic"]
+        assert len(topic_hits) == 1
+
+    def test_deduplicated_results_not_tagged_global(self, same_path_server):
+        """When deduped, the remaining entry should be local (not global)."""
+        data = self._get(f"{same_path_server}/api/search?q=Topic")
+        topic_hits = [r for r in data["results"] if r["name"] == "Topic"]
+        assert len(topic_hits) >= 1
+        assert not topic_hits[0].get("global")
+
+
+# ===================================================================
+# kb_loader: merge_configs path deduplication
+# ===================================================================
+
+class TestMergeConfigsPathDedup:
+    def test_same_resolved_path_skipped(self, tmp_path):
+        from kb_loader import KBConfig, KBEntry, merge_configs
+        # Create a real directory so Path.resolve() works
+        kb_dir = tmp_path / "knowledge"
+        kb_dir.mkdir()
+        project = KBConfig(entries=[KBEntry("core", str(kb_dir))])
+        global_ = KBConfig(entries=[KBEntry("god.core", str(kb_dir), readonly=True)])
+        merged = merge_configs(project, global_)
+        assert len(merged.entries) == 1
+        assert merged.entries[0].name == "core"
+
+    def test_different_paths_both_kept(self, tmp_path):
+        from kb_loader import KBConfig, KBEntry, merge_configs
+        local_dir = tmp_path / "local"
+        global_dir = tmp_path / "global"
+        local_dir.mkdir()
+        global_dir.mkdir()
+        project = KBConfig(entries=[KBEntry("core", str(local_dir))])
+        global_ = KBConfig(entries=[KBEntry("god.core", str(global_dir), readonly=True)])
+        merged = merge_configs(project, global_)
+        assert len(merged.entries) == 2
+
+    def test_dotslash_vs_absolute_deduped(self, tmp_path, monkeypatch):
+        """./knowledge and /absolute/path/knowledge resolve to same dir."""
+        from kb_loader import KBConfig, KBEntry, merge_configs
+        kb_dir = tmp_path / "knowledge"
+        kb_dir.mkdir()
+        monkeypatch.chdir(tmp_path)
+        project = KBConfig(entries=[KBEntry("core", "./knowledge")])
+        global_ = KBConfig(entries=[KBEntry("god.core", str(kb_dir), readonly=True)])
+        merged = merge_configs(project, global_)
+        assert len(merged.entries) == 1
+        assert merged.entries[0].name == "core"
 
 
 if __name__ == "__main__":

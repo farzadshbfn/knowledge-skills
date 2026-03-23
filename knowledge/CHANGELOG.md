@@ -11,6 +11,7 @@ KB project, reads its kb_roots at runtime. No duplication of KB root definitions
 - UPDATE: `view/skill/scripts/serve.py` — serve global KB files, tag search results, dedup same-path entries
 - UPDATE: `view/skill/scripts/index.html` — global tag in search, local tie-breaking, absolute path URL mapping
 - UPDATE: `find/skill/scripts/kb_loader.py` — merge_configs deduplicates by resolved path
+- UPDATE: `tests/view/test_serve.py` — 25 new tests for global KB viewer integration
 
 ## 2026-03-23 14:26 -- [feature] Global read-only KB (god knowledge)
 
