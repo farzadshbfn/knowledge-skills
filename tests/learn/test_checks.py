@@ -27,8 +27,54 @@ class TestCheckOrphans:
     def test_root_index_exempt(self):
         assert check_orphans({"index.md": "Root."}) == []
 
-    def test_skill_files_excluded(self):
-        files = {"index.md": "Root.", "topic/skill/SKILL.md": "Not checked."}
+    def test_skill_md_not_orphan(self):
+        """SKILL.md itself is never an orphan — it's the skill's entry point."""
+        files = {"index.md": "Root.", "topic/skill/SKILL.md": "Skill content."}
+        assert check_orphans(files) == []
+
+    def test_skill_asset_not_orphan(self):
+        """Assets are templates referenced via CLAUDE_SKILL_DIR, not markdown links."""
+        files = {
+            "index.md": "Root.",
+            "topic/skill/SKILL.md": "Use [assets/](assets/).",
+            "topic/skill/assets/template.md": asset(),
+        }
+        assert check_orphans(files) == []
+
+    def test_unreferenced_skill_reference_is_orphan(self):
+        """A reference file not linked from SKILL.md or any other file should be flagged."""
+        files = {
+            "index.md": "Root.",
+            "topic/skill/SKILL.md": skill("my-skill"),
+            "topic/skill/reference/used.md": reference(),
+            "topic/skill/reference/orphan.md": reference(),
+        }
+        # SKILL.md links to used.md but not orphan.md
+        files["topic/skill/SKILL.md"] = skill("my-skill") + "\nSee [ref](reference/used.md).\n"
+        orphan_files = {i.file for i in check_orphans(files)}
+        assert "topic/skill/reference/orphan.md" in orphan_files
+        assert "topic/skill/reference/used.md" not in orphan_files
+
+    def test_unreferenced_skill_agent_is_orphan(self):
+        """An agent file not linked from SKILL.md should be flagged."""
+        files = {
+            "index.md": "Root.",
+            "topic/skill/SKILL.md": skill("my-skill") + "\nUse [scouter](agents/scouter.md).\n",
+            "topic/skill/agents/scouter.md": skill_agent("scouter"),
+            "topic/skill/agents/orphan-agent.md": skill_agent("orphan"),
+        }
+        orphan_files = {i.file for i in check_orphans(files)}
+        assert "topic/skill/agents/orphan-agent.md" in orphan_files
+        assert "topic/skill/agents/scouter.md" not in orphan_files
+
+    def test_referenced_skill_files_not_orphan(self):
+        """Skill reference/agent files that ARE linked should not be orphans."""
+        files = {
+            "index.md": "Root.",
+            "topic/skill/SKILL.md": skill("my-skill") + "\nSee [ref](reference/guide.md) and [agent](agents/scout.md).\n",
+            "topic/skill/reference/guide.md": reference(),
+            "topic/skill/agents/scout.md": skill_agent("scout"),
+        }
         assert check_orphans(files) == []
 
     def test_basename_match_counts(self):

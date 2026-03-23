@@ -21,11 +21,13 @@ from typing import Protocol
 class KBEntry:
     name: str          # e.g. "core", "ios"
     path: str          # e.g. "./knowledge"
+    readonly: bool = False
 
 
 @dataclass
 class KBConfig:
     entries: list[KBEntry]
+    namespace: str = ""
 
 
 @dataclass
@@ -350,12 +352,20 @@ def check_orphans(
 
     topic_files: set[str] = set()
     for rel_path in files:
-        if "/skill/" in rel_path or "/assets/" in rel_path:
-            continue
         if Path(rel_path).name == "CHANGELOG.md":
             continue
         if any(p.startswith(".") for p in Path(rel_path).parts):
             continue
+        # Inside skill folders: include reference/ and agents/, skip assets/ and SKILL.md
+        if "/skill/" in rel_path:
+            parts = Path(rel_path).parts
+            skill_idx = list(parts).index("skill")
+            sub = parts[skill_idx + 1] if skill_idx + 1 < len(parts) else ""
+            if sub == "assets" or Path(rel_path).name == "SKILL.md":
+                continue
+            # scripts/ and other non-md infrastructure — skip
+            if sub not in ("reference", "agents"):
+                continue
         topic_files.add(rel_path)
 
     topic_files.discard("index.md")
@@ -883,6 +893,93 @@ def check_cross_kb_escape(
     return issues
 
 
+def check_hard_links_to_readonly(
+    config: KBConfig,
+    kb_file_maps: dict[str, dict[str, str]],
+) -> list[Issue]:
+    """Reject hard markdown links (not soft `see:` refs) targeting readonly KBs."""
+    issues: list[Issue] = []
+    readonly_names = {e.name for e in config.entries if e.readonly}
+    if not readonly_names:
+        return issues
+
+    for kb_name, files in kb_file_maps.items():
+        if kb_name in readonly_names:
+            continue  # don't check inside readonly KBs themselves
+        for rel_path, content in files.items():
+            in_code_block = False
+            for line_num, line in enumerate(content.split("\n"), 1):
+                if line.strip().startswith("```"):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    continue
+                cleaned = re.sub(r"`[^`]*`", "", line)
+                for m in re.finditer(r"\[([^\]]+)\]\(@([^/]+(?:\.[^/]+)?)/([^)]+)\)", cleaned):
+                    target_kb = m.group(2)
+                    if target_kb in readonly_names:
+                        issues.append(Issue(
+                            "error", "hard_link_to_readonly", f"[{kb_name}] {rel_path}",
+                            f"Hard markdown link to read-only KB '@{target_kb}' — use soft reference (`see: @{target_kb}/topic`) instead",
+                            f"line {line_num}",
+                        ))
+    return issues
+
+
+def check_soft_refs(
+    config: KBConfig,
+    kb_file_maps: dict[str, dict[str, str]],
+) -> list[Issue]:
+    """Validate `see: @namespace.kb/topic` references point to known KBs."""
+    issues: list[Issue] = []
+    kb_names = {e.name for e in config.entries}
+
+    for kb_name, files in kb_file_maps.items():
+        for rel_path, content in files.items():
+            in_code_block = False
+            for line_num, line in enumerate(content.split("\n"), 1):
+                if line.strip().startswith("```"):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    continue
+                cleaned = re.sub(r"`[^`]*`", "", line)
+                for m in re.finditer(r"see:\s+@([^\s/]+)/(\S+)", cleaned):
+                    ref_kb = m.group(1)
+                    if ref_kb not in kb_names:
+                        issues.append(Issue(
+                            "warning", "unknown_soft_ref", f"[{kb_name}] {rel_path}",
+                            f"Soft reference to unknown KB: @{ref_kb}",
+                            f"line {line_num}",
+                        ))
+    return issues
+
+
+def check_readonly_writes(
+    config: KBConfig,
+    changed_files: list[str],
+) -> list[Issue]:
+    """Reject file changes inside read-only KB paths."""
+    issues: list[Issue] = []
+    from os.path import abspath, commonpath
+
+    for entry in config.entries:
+        if not entry.readonly:
+            continue
+        abs_root = abspath(entry.path)
+        for f in changed_files:
+            abs_file = abspath(f)
+            try:
+                if commonpath([abs_file, abs_root]) == abs_root:
+                    issues.append(Issue(
+                        "error", "readonly_kb_write", f,
+                        f"File modified in read-only KB '{entry.name}' — changes to read-only KBs are not allowed",
+                    ))
+            except ValueError:
+                continue
+    return issues
+
+
 def validate_multi_kb(
     config: KBConfig,
     *,
@@ -899,6 +996,18 @@ def validate_multi_kb(
     kb_file_maps: dict[str, dict[str, str]] = {}
 
     for entry in config.entries:
+        # Skip full validation of readonly (global) KBs — only load their files for cross-KB checks
+        if entry.readonly:
+            all_files: dict[str, str] = {}
+            for rel_path in fs.list_md_files(entry.path):
+                full = f"{entry.path}/{rel_path}"
+                try:
+                    all_files[rel_path] = fs.read_text(full)
+                except (OSError, UnicodeDecodeError):
+                    continue
+            kb_file_maps[entry.name] = all_files
+            continue
+
         result = validate_kb(entry.path, fs=fs, agent_root=agent_root)
 
         for issue in result.issues:
@@ -914,7 +1023,7 @@ def validate_multi_kb(
         combined.stats.asset_files += result.stats.asset_files
         combined.stats.total_links += result.stats.total_links
 
-        all_files: dict[str, str] = {}
+        all_files = {}
         for rel_path in fs.list_md_files(entry.path):
             full = f"{entry.path}/{rel_path}"
             try:
@@ -925,11 +1034,15 @@ def validate_multi_kb(
 
     combined.issues.extend(check_cross_kb_links(config, kb_file_maps))
     combined.issues.extend(check_cross_kb_escape(config, kb_file_maps))
+    combined.issues.extend(check_hard_links_to_readonly(config, kb_file_maps))
+    combined.issues.extend(check_soft_refs(config, kb_file_maps))
 
     changed = _get_git_changed_files()
     if changed:
+        combined.issues.extend(check_readonly_writes(config, changed))
         for entry in config.entries:
-            combined.issues.extend(check_changelog(changed, entry.path))
+            if not entry.readonly:
+                combined.issues.extend(check_changelog(changed, entry.path))
 
     return combined
 
@@ -998,7 +1111,7 @@ def load_config(config_path: str, fs: FileSystem | None = None) -> KBConfig:
         KBEntry(name=e["name"], path=e["path"])
         for e in data.get("kb_roots", [])
     ]
-    return KBConfig(entries=entries)
+    return KBConfig(entries=entries, namespace=data.get("namespace", ""))
 
 
 def _get_git_changed_files() -> list[str]:

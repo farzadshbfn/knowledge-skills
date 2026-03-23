@@ -24,9 +24,12 @@ from kb_loader import (
     format_compact,
     format_list_topics,
     load_config,
+    load_global_config,
     load_kb,
     load_multi_kb,
+    merge_configs,
     node_to_dict,
+    resolve_home_path,
     structure_to_dict,
 )
 from find_helpers import note, index, project_agent, reference, skill, skill_agent
@@ -1083,6 +1086,219 @@ class TestConfigFlag:
             rc = main([str(tmp_path / "mykb"), "--list-topics"])
         assert rc == 0
         assert "direct" in buf.getvalue()
+
+# ===================================================================
+# resolve_home_path
+# ===================================================================
+
+class TestResolveHomePath:
+    def test_tilde_expansion(self):
+        result = resolve_home_path("~/foo/bar")
+        assert not result.startswith("~")
+        assert result.endswith("/foo/bar")
+
+    def test_non_tilde_unchanged(self):
+        assert resolve_home_path("./knowledge") == "./knowledge"
+        assert resolve_home_path("/absolute/path") == "/absolute/path"
+
+    def test_tilde_only(self):
+        result = resolve_home_path("~/")
+        assert not result.startswith("~")
+
+
+# ===================================================================
+# load_global_config
+# ===================================================================
+
+class TestLoadGlobalConfig:
+    def test_returns_none_when_missing(self):
+        fs = MockFileSystem({})
+        result = load_global_config("/nonexistent/config.json", fs=fs)
+        assert result is None
+
+    def test_loads_with_namespace(self):
+        fs = MockFileSystem({
+            "/home/user/config.json": json.dumps({
+                "namespace": "god",
+                "kb_roots": [
+                    {"name": "core", "path": "/data/core"},
+                    {"name": "swift", "path": "/data/swift"},
+                ],
+            }),
+        })
+        config = load_global_config("/home/user/config.json", fs=fs)
+        assert config is not None
+        assert config.namespace == "god"
+        assert len(config.entries) == 2
+        assert config.entries[0].name == "god.core"
+        assert config.entries[1].name == "god.swift"
+        assert all(e.readonly for e in config.entries)
+
+    def test_loads_without_namespace(self):
+        fs = MockFileSystem({
+            "/config.json": json.dumps({
+                "kb_roots": [{"name": "shared", "path": "/data/shared"}],
+            }),
+        })
+        config = load_global_config("/config.json", fs=fs)
+        assert config is not None
+        assert config.namespace == ""
+        assert config.entries[0].name == "shared"
+        assert config.entries[0].readonly is True
+
+    def test_resolves_tilde_in_paths(self):
+        fs = MockFileSystem({
+            "/config.json": json.dumps({
+                "namespace": "god",
+                "kb_roots": [{"name": "core", "path": "~/knowledge/core"}],
+            }),
+        })
+        config = load_global_config("/config.json", fs=fs)
+        assert config is not None
+        assert not config.entries[0].path.startswith("~")
+
+
+# ===================================================================
+# merge_configs
+# ===================================================================
+
+class TestMergeConfigs:
+    def test_merge_adds_global_entries(self):
+        project = KBConfig(entries=[KBEntry("core", "./kb")])
+        global_ = KBConfig(entries=[
+            KBEntry("god.core", "/data/core", readonly=True),
+        ])
+        merged = merge_configs(project, global_)
+        assert len(merged.entries) == 2
+        assert merged.entries[0].name == "core"
+        assert merged.entries[0].readonly is False
+        assert merged.entries[1].name == "god.core"
+        assert merged.entries[1].readonly is True
+
+    def test_merge_with_none_global(self):
+        project = KBConfig(entries=[KBEntry("core", "./kb")])
+        merged = merge_configs(project, None)
+        assert merged is project
+
+    def test_project_name_shadows_global(self):
+        """If a global entry has the same name as a project entry, it's skipped."""
+        project = KBConfig(entries=[KBEntry("core", "./kb")])
+        global_ = KBConfig(entries=[KBEntry("core", "/global/core", readonly=True)])
+        merged = merge_configs(project, global_)
+        assert len(merged.entries) == 1
+        assert merged.entries[0].path == "./kb"
+
+    def test_preserves_project_namespace(self):
+        project = KBConfig(entries=[KBEntry("core", "./kb")], namespace="proj")
+        global_ = KBConfig(entries=[KBEntry("god.core", "/g", readonly=True)], namespace="god")
+        merged = merge_configs(project, global_)
+        assert merged.namespace == "proj"
+
+
+# ===================================================================
+# readonly propagation in load_multi_kb
+# ===================================================================
+
+class TestReadonlyPropagation:
+    def test_readonly_propagated_to_structure(self):
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb2/index.md": index("Root2"),
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        multi = load_multi_kb(config, fs=fs)
+        assert multi.kbs[0].readonly is False
+        assert multi.kbs[1].readonly is True
+
+    def test_structure_to_dict_includes_readonly(self):
+        fs = MockFileSystem({"kb/index.md": index("Root")})
+        config = KBConfig(entries=[KBEntry("god.core", "kb", readonly=True)])
+        multi = load_multi_kb(config, fs=fs)
+        d = structure_to_dict(multi.kbs[0])
+        assert d["readonly"] is True
+
+    def test_structure_to_dict_omits_readonly_when_false(self):
+        fs = MockFileSystem({"kb/index.md": index("Root")})
+        config = KBConfig(entries=[KBEntry("core", "kb")])
+        multi = load_multi_kb(config, fs=fs)
+        d = structure_to_dict(multi.kbs[0])
+        assert "readonly" not in d
+
+
+# ===================================================================
+# format_list_topics with readonly badge
+# ===================================================================
+
+class TestReadonlyBadge:
+    def test_readonly_kb_gets_badge(self):
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb1/topic/index.md": index("Topic"),
+            "kb2/index.md": index("Root2"),
+            "kb2/other/index.md": index("Other"),
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        multi = load_multi_kb(config, fs=fs)
+        text = format_list_topics(multi)
+        assert "@core" in text
+        assert "@god.core [read-only]" in text
+
+    def test_writable_kb_no_badge(self):
+        fs = MockFileSystem({
+            "kb/index.md": index("Root"),
+            "kb/topic/index.md": index("Topic"),
+        })
+        config = KBConfig(entries=[KBEntry("core", "kb")])
+        multi = load_multi_kb(config, fs=fs)
+        text = format_list_topics(multi)
+        assert "[read-only]" not in text
+
+
+# ===================================================================
+# filter_topic with namespaced global KBs
+# ===================================================================
+
+class TestFilterTopicNamespaced:
+    def test_at_namespaced_kb(self):
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb2/index.md": index("Root2"),
+            "kb2/concurrency/index.md": index("Concurrency"),
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        multi = load_multi_kb(config, fs=fs)
+        out = filter_topic(multi, "@god.core/concurrency")
+        assert out is not None
+        kb_name, d = out
+        assert kb_name == "god.core"
+        assert d["index"]["name"] == "Concurrency"
+
+    def test_ambiguous_topic_prefers_project(self):
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb1/shared/index.md": index("Project Shared"),
+            "kb2/index.md": index("Root2"),
+            "kb2/shared/index.md": index("Global Shared"),
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        multi = load_multi_kb(config, fs=fs)
+        out = filter_topic(multi, "shared")
+        assert out is not None
+        kb_name, d = out
+        assert kb_name == "core"  # project wins
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

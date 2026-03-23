@@ -59,6 +59,14 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/analyze_access.py --top-topics --candidates -
 ```
 Output is compact JSON (~50-100 tokens).
 
+### Global KB Suggestions
+
+Check for pending suggestions to global (read-only) KBs:
+```bash
+uv run ${CLAUDE_SKILL_DIR}/../kb-learn/scripts/suggestion.py list --status pending --json
+```
+If count > 0, include in status output. Alert when > 5 pending suggestions.
+
 ### Memory
 
 Read the memory file at the standard Claude memory location for this project. Look for `monitoring_kb_observations.md`. This contains:
@@ -78,8 +86,9 @@ Use the analyzer agent when the access log is large (1000+ entries). For most ca
 ## 3. Status Mode (`--status`)
 
 1. **Gather data**: Run `analyze_access.py --top-topics --candidates --health --format=json`
-2. **Read memory**: Load `monitoring_kb_observations.md` from memory directory
-3. **Present findings**:
+2. **Check suggestions**: Run `suggestion.py list --status pending --json` to count pending global KB suggestions
+3. **Read memory**: Load `monitoring_kb_observations.md` from memory directory
+4. **Present findings**:
 
    **Skill Candidates:**
    For each candidate topic (high read count, no `skill/` folder):
@@ -92,6 +101,10 @@ Use the analyzer agent when the access log is large (1000+ entries). For most ca
    - Skill name, correction count, last issue description
    - Status: `watch` (1-2 corrections), `action` (3+ corrections)
    - Recommendation: "Fix?", "Skip", "Mark resolved"
+
+   **Pending Suggestions (Global KBs):**
+   If any pending suggestions exist, show count and summary per target KB.
+   Alert if > 5 pending — user should review in the global KB repo.
 
    **Recent Conversions:**
    List from memory's Conversion History table.

@@ -63,11 +63,13 @@ class MockFileSystem:
 class KBEntry:
     name: str
     path: str
+    readonly: bool = False
 
 
 @dataclass
 class KBConfig:
     entries: list[KBEntry]
+    namespace: str = ""
 
 
 @dataclass
@@ -90,6 +92,7 @@ class CategoryNode:
 class KBStructure:
     kb_root: str
     kb_name: str = ""
+    readonly: bool = False
     tree: CategoryNode | None = None
     skills: list[NoteMeta] = field(default_factory=list)
     agents: list[NoteMeta] = field(default_factory=list)
@@ -230,7 +233,7 @@ def node_to_dict(node: CategoryNode, path_prefix: str = "") -> dict:
 
 def structure_to_dict(s: KBStructure) -> dict:
     prefix = f"{s.kb_root}/" if s.kb_root else ""
-    return {
+    d: dict = {
         "kb_root": s.kb_root,
         "kb_name": s.kb_name,
         "tree": node_to_dict(s.tree, prefix) if s.tree else None,
@@ -238,6 +241,9 @@ def structure_to_dict(s: KBStructure) -> dict:
         "agents": [asdict(a) for a in s.agents],
         "total_files": s.total_files,
     }
+    if s.readonly:
+        d["readonly"] = True
+    return d
 
 
 def format_compact(multi: MultiKBStructure) -> str:
@@ -301,7 +307,8 @@ def format_list_topics(multi: MultiKBStructure) -> str:
     for kb in multi.kbs:
         if not kb.tree or not kb.tree.children:
             continue
-        lines = [f"@{kb.kb_name}"]
+        badge = " [read-only]" if kb.readonly else ""
+        lines = [f"@{kb.kb_name}{badge}"]
         lines.extend(_tree_lines(kb.tree))
         sections.append("\n".join(lines))
     return "\n\n".join(sections) if sections else "Topics (0 categories):"
@@ -353,6 +360,7 @@ def load_multi_kb(
     for entry in config.entries:
         kb = load_kb(entry.path, fs=fs)
         kb.kb_name = entry.name
+        kb.readonly = entry.readonly
         result.kbs.append(kb)
     return result
 
@@ -364,7 +372,48 @@ def load_config(config_path: str, fs: FileSystem | None = None) -> KBConfig:
         KBEntry(name=e["name"], path=e["path"])
         for e in data.get("kb_roots", [])
     ]
-    return KBConfig(entries=entries)
+    return KBConfig(entries=entries, namespace=data.get("namespace", ""))
+
+
+def resolve_home_path(path: str) -> str:
+    if path.startswith("~/"):
+        return str(Path.home() / path[2:])
+    return path
+
+
+_GLOBAL_CONFIG = "~/.claude/knowledge-base/config.json"
+
+
+def load_global_config(
+    config_path: str = _GLOBAL_CONFIG,
+    fs: FileSystem | None = None,
+) -> KBConfig | None:
+    fs = fs or RealFileSystem()
+    resolved = resolve_home_path(config_path)
+    if not fs.exists(resolved):
+        return None
+    data = json.loads(fs.read_text(resolved))
+    namespace = data.get("namespace", "")
+    entries = []
+    for e in data.get("kb_roots", []):
+        name = f"{namespace}.{e['name']}" if namespace else e["name"]
+        path = resolve_home_path(e["path"])
+        entries.append(KBEntry(name=name, path=path, readonly=True))
+    return KBConfig(entries=entries, namespace=namespace)
+
+
+def merge_configs(
+    project: KBConfig,
+    global_: KBConfig | None,
+) -> KBConfig:
+    if global_ is None:
+        return project
+    merged = list(project.entries)
+    project_names = {e.name for e in project.entries}
+    for entry in global_.entries:
+        if entry.name not in project_names:
+            merged.append(entry)
+    return KBConfig(entries=merged, namespace=project.namespace)
 
 
 def _err(msg: str) -> int:
@@ -378,6 +427,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("path", nargs="?", default=".")
     parser.add_argument("--config", type=str, metavar="PATH")
+    parser.add_argument("--no-global", action="store_true",
+                        help="Skip loading global KB config")
     output_group = parser.add_mutually_exclusive_group()
     output_group.add_argument("--compact", action="store_true")
     output_group.add_argument("--list-topics", action="store_true")
@@ -386,13 +437,24 @@ def main(argv: list[str] | None = None) -> int:
 
     agent_root = ".claude/agents" if Path(".claude/agents").is_dir() else None
 
+    # Load global config (unless opted out)
+    global_config = None if args.no_global else load_global_config()
+
     # Auto-detect config: explicit --config, or default path if it exists
     cfg = args.config or ".claude/knowledge-base/config.json"
     if Path(cfg).exists():
         config = load_config(cfg)
+        config = merge_configs(config, global_config)
         for entry in config.entries:
             if not Path(entry.path).is_dir():
+                if entry.readonly:
+                    continue  # skip missing global KBs silently
                 return _err(f"KB root '{entry.path}' not found")
+        # Filter out missing readonly entries before loading
+        config = KBConfig(
+            entries=[e for e in config.entries if Path(e.path).is_dir()],
+            namespace=config.namespace,
+        )
         multi = load_multi_kb(config)
     else:
         if args.config:
@@ -402,7 +464,20 @@ def main(argv: list[str] | None = None) -> int:
             return _err(f"KB root '{kb_root}' not found")
         structure = load_kb(kb_root, agent_root=agent_root)
         structure.kb_name = "default"
-        multi = MultiKBStructure(kbs=[structure])
+        # Still merge global KBs even without project config
+        if global_config:
+            project_config = KBConfig(entries=[KBEntry("default", kb_root)])
+            merged = merge_configs(project_config, global_config)
+            # Filter out missing readonly entries
+            merged = KBConfig(
+                entries=[e for e in merged.entries
+                         if Path(e.path).is_dir() or not e.readonly],
+                namespace=merged.namespace,
+            )
+            multi = load_multi_kb(merged)
+            multi.kbs[0] = structure  # keep original (has agents)
+        else:
+            multi = MultiKBStructure(kbs=[structure])
 
     agents = _load_agents(agent_root, RealFileSystem()) if agent_root else []
 

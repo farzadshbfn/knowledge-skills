@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-23 14:26 -- [feature] Global read-only KB (god knowledge)
+
+Add global KB support: kb_loader gains config merging, readonly field, namespace
+prefixing, and `~` path resolution. validate_kb gains checks for hard links to
+readonly KBs, soft reference validation, and readonly write rejection.
+
+- UPDATE: `find/skill/scripts/kb_loader.py`
+- UPDATE: `find/skill/SKILL.md`
+- UPDATE: `learn/skill/scripts/validate_kb.py`
+- UPDATE: `learn/skill/SKILL.md`
+- CREATE: `learn/skill/scripts/suggestion.py`
+- UPDATE: `monitor/skill/SKILL.md`
+- FIX: `learn/skill/scripts/validate_kb.py` — orphan check now covers skill reference/ and agents/ files
+
 ## 2026-03-22 -- [fix] Fix CLAUDE_SKILL_DIR cross-skill paths
 
 Replaced `../../learn/skill/` and `../../find/skill/` patterns with

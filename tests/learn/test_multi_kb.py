@@ -7,6 +7,7 @@ from unittest import mock
 from validate_kb import (
     KBConfig, KBEntry, MockFileSystem,
     check_changelog, check_cross_kb_escape, check_cross_kb_links,
+    check_hard_links_to_readonly, check_readonly_writes, check_soft_refs,
     check_kb_path_exclusivity, main, validate_multi_kb,
 )
 from learn_helpers import note, index
@@ -214,3 +215,185 @@ class TestValidateMultiKb:
         changelog_issues = [i for i in result.issues if i.check == "missing_changelog"]
         assert len(changelog_issues) == 1
         assert "kb1" in changelog_issues[0].file
+
+    def test_readonly_kb_skips_full_validation(self):
+        """Readonly KBs should not be fully validated (no frontmatter checks etc)."""
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb2/index.md": "# No Frontmatter",  # would normally fail
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        with mock.patch("validate_kb._get_git_changed_files", return_value=[]):
+            result = validate_multi_kb(config, fs=fs)
+        fm_issues = [i for i in result.issues if i.check == "frontmatter_missing"]
+        # Only kb1 issues, not kb2
+        assert all("[core]" in i.file for i in fm_issues)
+        assert not any("[god.core]" in i.file for i in fm_issues)
+
+    def test_readonly_kb_changelog_not_required(self):
+        """Changes in readonly KB should not trigger missing_changelog."""
+        fs = MockFileSystem({
+            "kb1/index.md": index("Root1"),
+            "kb2/index.md": index("Root2"),
+        })
+        config = KBConfig(entries=[
+            KBEntry("core", "kb1"),
+            KBEntry("god.core", "kb2", readonly=True),
+        ])
+        with mock.patch("validate_kb._get_git_changed_files", return_value=["kb2/topic/note.md"]):
+            result = validate_multi_kb(config, fs=fs)
+        changelog_issues = [i for i in result.issues if i.check == "missing_changelog"]
+        assert len(changelog_issues) == 0
+
+
+# ===================================================================
+# check_hard_links_to_readonly
+# ===================================================================
+
+class TestHardLinksToReadonly:
+    def test_hard_link_to_readonly_rejected(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        kb_file_maps = {
+            "core": {"topic/note.md": "See [ref](@god.core/topic/note.md)."},
+            "god.core": {"topic/note.md": note("Note")},
+        }
+        issues = check_hard_links_to_readonly(config, kb_file_maps)
+        assert len(issues) == 1
+        assert issues[0].check == "hard_link_to_readonly"
+
+    def test_hard_link_to_writable_ok(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("ios", "./kb2"),
+        ])
+        kb_file_maps = {
+            "core": {"topic/note.md": "See [ref](@ios/topic/note.md)."},
+            "ios": {"topic/note.md": note("Note")},
+        }
+        assert check_hard_links_to_readonly(config, kb_file_maps) == []
+
+    def test_no_readonly_kbs(self):
+        config = KBConfig(entries=[KBEntry("core", "./kb")])
+        kb_file_maps = {"core": {"note.md": "Content"}}
+        assert check_hard_links_to_readonly(config, kb_file_maps) == []
+
+    def test_inline_code_skipped(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        kb_file_maps = {
+            "core": {"note.md": "Use `[@god.core/note.md](@god.core/note.md)` syntax."},
+            "god.core": {},
+        }
+        assert check_hard_links_to_readonly(config, kb_file_maps) == []
+
+    def test_code_block_skipped(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        content = "```\n[ref](@god.core/note.md)\n```"
+        kb_file_maps = {
+            "core": {"note.md": content},
+            "god.core": {},
+        }
+        assert check_hard_links_to_readonly(config, kb_file_maps) == []
+
+    def test_links_inside_readonly_kb_not_checked(self):
+        """We don't check links originating from inside the readonly KB."""
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        kb_file_maps = {
+            "core": {},
+            "god.core": {"note.md": "See [ref](@core/topic/note.md)."},
+        }
+        assert check_hard_links_to_readonly(config, kb_file_maps) == []
+
+
+# ===================================================================
+# check_soft_refs
+# ===================================================================
+
+class TestSoftRefs:
+    def test_valid_soft_ref(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        kb_file_maps = {
+            "core": {"note.md": "see: @god.core/concurrency"},
+            "god.core": {},
+        }
+        assert check_soft_refs(config, kb_file_maps) == []
+
+    def test_unknown_kb_in_soft_ref(self):
+        config = KBConfig(entries=[KBEntry("core", "./kb")])
+        kb_file_maps = {"core": {"note.md": "see: @nonexistent/topic"}}
+        issues = check_soft_refs(config, kb_file_maps)
+        assert len(issues) == 1
+        assert issues[0].check == "unknown_soft_ref"
+
+    def test_inline_code_skipped(self):
+        config = KBConfig(entries=[KBEntry("core", "./kb")])
+        kb_file_maps = {"core": {"note.md": "Use `see: @nonexistent/topic` format."}}
+        assert check_soft_refs(config, kb_file_maps) == []
+
+    def test_code_block_skipped(self):
+        config = KBConfig(entries=[KBEntry("core", "./kb")])
+        content = "```\nsee: @nonexistent/topic\n```"
+        kb_file_maps = {"core": {"note.md": content}}
+        assert check_soft_refs(config, kb_file_maps) == []
+
+    def test_multiple_soft_refs(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+            KBEntry("god.swift", "./kb3", readonly=True),
+        ])
+        kb_file_maps = {
+            "core": {"note.md": "see: @god.core/topic\nsee: @god.swift/actors"},
+            "god.core": {},
+            "god.swift": {},
+        }
+        assert check_soft_refs(config, kb_file_maps) == []
+
+
+# ===================================================================
+# check_readonly_writes
+# ===================================================================
+
+class TestReadonlyWrites:
+    def test_write_to_readonly_rejected(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        issues = check_readonly_writes(config, ["kb2/topic/note.md"])
+        assert len(issues) == 1
+        assert issues[0].check == "readonly_kb_write"
+
+    def test_write_to_writable_ok(self):
+        config = KBConfig(entries=[
+            KBEntry("core", "./kb1"),
+            KBEntry("god.core", "./kb2", readonly=True),
+        ])
+        assert check_readonly_writes(config, ["kb1/topic/note.md"]) == []
+
+    def test_no_readonly_kbs(self):
+        config = KBConfig(entries=[KBEntry("core", "./kb")])
+        assert check_readonly_writes(config, ["kb/note.md"]) == []
+
+    def test_no_changed_files(self):
+        config = KBConfig(entries=[
+            KBEntry("god.core", "./kb", readonly=True),
+        ])
+        assert check_readonly_writes(config, []) == []

@@ -103,6 +103,7 @@ After loading KB, check for concept evolution — outdated terminology, framing,
 ## 4. Shared Procedure: Update KB
 
 0. **KB routing**: Multiple KBs → infer target from context; if ambiguous, ask user.
+   - **Read-only guard**: If target KB has `[read-only]` badge (global KB), do NOT write to it. Instead, create a suggestion file in `~/.claude/knowledge-base/suggestions/` using `suggestion.py` (see `${CLAUDE_SKILL_DIR}/scripts/suggestion.py --help`). Inform the user that a suggestion was created for the global KB.
 0a. **Skill folder check**: If topic has `skill/` subfolder, route by content type:
    - "What/where/when" → KB concept notes (lightweight: summary, sources)
    - "How/when to use/procedures" → skill's `reference/` or `SKILL.md`
@@ -121,7 +122,7 @@ After loading KB, check for concept evolution — outdated terminology, framing,
 
 3. Keep heading accurate after modifications.
 
-4. **Cross-references**: markdown links with relative paths. Every concept note should link to at least one other note/index. Cross-KB: use `@kb-name/path` format.
+4. **Cross-references**: markdown links with relative paths. Every concept note should link to at least one other note/index. Cross-KB: use `@kb-name/path` format. **Global KBs**: use soft references only — `see: @namespace.kb/topic` (no hard markdown links to read-only KBs).
 
 5. **Index updates**: Link new notes from relevant index. Create index if 3+ notes and none exists. Use table when section has 3+ items (see [reference/folder-structure.md](reference/folder-structure.md)).
 
