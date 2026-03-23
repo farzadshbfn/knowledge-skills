@@ -394,11 +394,25 @@ def load_global_config(
         return None
     data = json.loads(fs.read_text(resolved))
     namespace = data.get("namespace", "")
+    source = data.get("source", "")
+    if not source:
+        return None
+    source = resolve_home_path(source)
+    # Read the source project's own config
+    source_config_path = f"{source}/.claude/knowledge-base/config.json"
+    if not fs.exists(source_config_path):
+        return None
+    source_data = json.loads(fs.read_text(source_config_path))
     entries = []
-    for e in data.get("kb_roots", []):
+    for e in source_data.get("kb_roots", []):
         name = f"{namespace}.{e['name']}" if namespace else e["name"]
-        path = resolve_home_path(e["path"])
-        entries.append(KBEntry(name=name, path=path, readonly=True))
+        # Resolve source KB paths relative to the source project root
+        kb_path = e["path"]
+        if kb_path.startswith("./"):
+            kb_path = f"{source}/{kb_path[2:]}"
+        elif not kb_path.startswith("/"):
+            kb_path = f"{source}/{kb_path}"
+        entries.append(KBEntry(name=name, path=kb_path, readonly=True))
     return KBConfig(entries=entries, namespace=namespace)
 
 

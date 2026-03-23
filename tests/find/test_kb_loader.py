@@ -1116,46 +1116,77 @@ class TestLoadGlobalConfig:
         result = load_global_config("/nonexistent/config.json", fs=fs)
         assert result is None
 
+    def test_returns_none_when_no_source(self):
+        fs = MockFileSystem({
+            "/global.json": json.dumps({"namespace": "god"}),
+        })
+        assert load_global_config("/global.json", fs=fs) is None
+
+    def test_returns_none_when_source_config_missing(self):
+        fs = MockFileSystem({
+            "/global.json": json.dumps({"namespace": "god", "source": "/proj"}),
+        })
+        assert load_global_config("/global.json", fs=fs) is None
+
     def test_loads_with_namespace(self):
         fs = MockFileSystem({
-            "/home/user/config.json": json.dumps({
+            "/global.json": json.dumps({
                 "namespace": "god",
+                "source": "/proj",
+            }),
+            "/proj/.claude/knowledge-base/config.json": json.dumps({
                 "kb_roots": [
-                    {"name": "core", "path": "/data/core"},
-                    {"name": "swift", "path": "/data/swift"},
+                    {"name": "core", "path": "./knowledge"},
+                    {"name": "swift", "path": "./swift-kb"},
                 ],
             }),
         })
-        config = load_global_config("/home/user/config.json", fs=fs)
+        config = load_global_config("/global.json", fs=fs)
         assert config is not None
         assert config.namespace == "god"
         assert len(config.entries) == 2
         assert config.entries[0].name == "god.core"
+        assert config.entries[0].path == "/proj/knowledge"
         assert config.entries[1].name == "god.swift"
+        assert config.entries[1].path == "/proj/swift-kb"
         assert all(e.readonly for e in config.entries)
 
     def test_loads_without_namespace(self):
         fs = MockFileSystem({
-            "/config.json": json.dumps({
-                "kb_roots": [{"name": "shared", "path": "/data/shared"}],
+            "/global.json": json.dumps({"namespace": "", "source": "/proj"}),
+            "/proj/.claude/knowledge-base/config.json": json.dumps({
+                "kb_roots": [{"name": "shared", "path": "./data"}],
             }),
         })
-        config = load_global_config("/config.json", fs=fs)
+        config = load_global_config("/global.json", fs=fs)
         assert config is not None
         assert config.namespace == ""
         assert config.entries[0].name == "shared"
+        assert config.entries[0].path == "/proj/data"
         assert config.entries[0].readonly is True
 
-    def test_resolves_tilde_in_paths(self):
+    def test_resolves_relative_paths_from_source(self):
+        """Source KB paths like ./knowledge resolve relative to the source project root."""
         fs = MockFileSystem({
-            "/config.json": json.dumps({
-                "namespace": "god",
-                "kb_roots": [{"name": "core", "path": "~/knowledge/core"}],
+            "/global.json": json.dumps({"namespace": "god", "source": "/my/project"}),
+            "/my/project/.claude/knowledge-base/config.json": json.dumps({
+                "kb_roots": [{"name": "core", "path": "./knowledge"}],
             }),
         })
-        config = load_global_config("/config.json", fs=fs)
+        config = load_global_config("/global.json", fs=fs)
         assert config is not None
-        assert not config.entries[0].path.startswith("~")
+        assert config.entries[0].path == "/my/project/knowledge"
+
+    def test_absolute_source_kb_paths_unchanged(self):
+        fs = MockFileSystem({
+            "/global.json": json.dumps({"namespace": "god", "source": "/proj"}),
+            "/proj/.claude/knowledge-base/config.json": json.dumps({
+                "kb_roots": [{"name": "core", "path": "/absolute/kb"}],
+            }),
+        })
+        config = load_global_config("/global.json", fs=fs)
+        assert config is not None
+        assert config.entries[0].path == "/absolute/kb"
 
 
 # ===================================================================

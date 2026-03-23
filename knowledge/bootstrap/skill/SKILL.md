@@ -1,13 +1,23 @@
 ---
 name: kb-bootstrap
-description: Sets up the knowledge base for a project. Creates the KB config, directory structure, and appends minimal instructions to the project's CLAUDE.md. Run this once when first using KB skills in a new project.
-argument-hint: "[kb-path]"
+description: Sets up the knowledge base for a project or initializes the global (god) KB config. Creates the KB config, directory structure, and appends minimal instructions to the project's CLAUDE.md. Run this once when first using KB skills in a new project. Use --global to set up the global read-only KB.
+argument-hint: "[kb-path | --global]"
 effort: low
 ---
 
 # /kb-bootstrap — KB Setup
 
 Sets up KB configuration and appends minimal instructions to the project's CLAUDE.md.
+
+## 0. Routing
+
+Parse `$ARGS`:
+- If `--global` is present → follow **Section G** (Global KB Setup), then stop.
+- Otherwise → continue with Section 1 (Project KB Setup).
+
+---
+
+# Project KB Setup
 
 ## 1. Check Prerequisites
 
@@ -166,3 +176,70 @@ If the user chooses to add, merge into the same settings file used in 6c — do 
 ## 7. Confirm
 
 Tell the user: "KB is set up. Restart Claude Code to pick up the new hooks, then start learning with `/kb-learn`."
+
+---
+
+# Section G — Global KB Setup (`--global`)
+
+Sets up the global (god) KB config at `~/.claude/knowledge-base/config.json`. This config makes KBs available as read-only across all projects.
+
+## G1. Check Prerequisites
+
+Run `which uv`. If not found, show the same install message as Section 1 and stop.
+
+## G2. Check Existing Global Config
+
+Check if `~/.claude/knowledge-base/config.json` already exists.
+
+- **Exists**: Read and show current config (namespace + kb_roots). Ask using AskUserQuestion:
+  - "Add another KB root"
+  - "Done"
+  - If "Add another KB root" → go to G3b.
+  - If "Done" → stop.
+- **Does not exist**: Continue to G3.
+
+## G3. Choose Namespace
+
+Ask the user using AskUserQuestion:
+
+- "Use `god` (Recommended)" — the default namespace
+- "Custom namespace" — ask for the name
+
+The namespace is a prefix that disambiguates global KB names from project KB names (e.g., namespace `god` + KB name `core` → `god.core`).
+
+## G3b. Choose Source Project
+
+Ask the user for the path to the KB project that should be used as the global source. This must be an existing project with its own `.claude/knowledge-base/config.json`.
+
+Validate:
+- Path must exist and be a directory.
+- `<path>/.claude/knowledge-base/config.json` must exist. If not, tell the user: "Run `/kb-bootstrap` inside that project first to set it up, then re-run `/kb-bootstrap --global`."
+
+## G4. Create Global Config
+
+1. Create `~/.claude/knowledge-base/` directory if needed.
+
+2. Write `~/.claude/knowledge-base/config.json`:
+   ```json
+   {
+     "namespace": "<chosen-namespace>",
+     "source": "<source-project-path>"
+   }
+   ```
+
+   The global config just references the source project. All KB roots are read from the source project's own config at runtime — no duplication.
+
+3. Create `~/.claude/knowledge-base/suggestions/` directory for the suggestion pipeline.
+
+## G5. Confirm
+
+Tell the user:
+
+> Global KB configured. All projects will now see KBs from `<source-path>` as read-only with `@<namespace>.*` prefix.
+>
+> - Global config: `~/.claude/knowledge-base/config.json`
+> - Source project: `<source-path>`
+> - Suggestions: `~/.claude/knowledge-base/suggestions/`
+>
+> Use `see: @<namespace>.<kb-name>/topic` in project notes to reference global KB content.
+> To manage the global KB, work inside the source project directly.

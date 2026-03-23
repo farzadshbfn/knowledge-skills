@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-23 19:33 -- [feature] Add --global mode to kb-bootstrap
+
+Bootstrap can now initialize the global KB config at ~/.claude/knowledge-base/
+config.json. Uses source-reference design: global config points to an existing
+KB project, reads its kb_roots at runtime. No duplication of KB root definitions.
+
+- UPDATE: `bootstrap/skill/SKILL.md`
+- UPDATE: `find/skill/scripts/kb_loader.py` — load_global_config follows source reference
+
 ## 2026-03-23 14:26 -- [feature] Global read-only KB (god knowledge)
 
 Add global KB support: kb_loader gains config merging, readonly field, namespace
