@@ -1512,5 +1512,66 @@ class TestMergeConfigsPathDedup:
         assert merged.entries[0].name == "core"
 
 
+# ===================================================================
+# Tests: global KBs grouped under "global" super folder in sidebar
+# ===================================================================
+
+class TestGlobalKBSidebarGrouping:
+    """Sidebar must group global KBs under a collapsible 'global' super folder."""
+
+    def _get_html(self, url):
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return resp.read().decode()
+
+    def test_html_has_render_tree_with_local_global_split(self, server_url):
+        """renderTree separates KBs into localKBs and globalKBs."""
+        html = self._get_html(f"{server_url}/")
+        assert "localKBs" in html
+        assert "globalKBs" in html
+        assert "treeData.kbs.filter(kb => !kb.readonly)" in html
+        assert "treeData.kbs.filter(kb => kb.readonly)" in html
+
+    def test_html_has_global_super_folder_label(self, server_url):
+        """A 'global' super folder label with the tree-kb-label-global class exists."""
+        html = self._get_html(f"{server_url}/")
+        assert "tree-kb-label-global" in html
+        # The label text is "global"
+        assert '"global \\u25B8"' in html or "global \\u25B8" in html or 'global \u25B8' in html
+
+    def test_global_super_folder_collapsed_by_default(self, server_url):
+        """Global wrapper has class 'tree-children' without 'open' (collapsed)."""
+        html = self._get_html(f"{server_url}/")
+        # The global wrapper: className = "tree-children" (no "open")
+        assert 'globalWrap.className = "tree-children"' in html
+        # Verify the comment explains the intent
+        assert "collapsed by default" in html
+
+    def test_global_super_folder_toggle_logic(self, server_url):
+        """Clicking the global label toggles open/collapsed state."""
+        html = self._get_html(f"{server_url}/")
+        assert "globalWrap.classList.toggle" in html
+
+    def test_render_kb_section_extracted(self, server_url):
+        """renderKBSection is a standalone function used for both local and global KBs."""
+        html = self._get_html(f"{server_url}/")
+        assert "function renderKBSection(container, kb)" in html
+        # Both local and global loops call it
+        assert "renderKBSection(container, kb)" in html
+        assert "renderKBSection(globalWrap, kb)" in html
+
+    def test_global_super_folder_css_exists(self, server_url):
+        """CSS for .tree-kb-label-global includes border-top separator."""
+        html = self._get_html(f"{server_url}/")
+        assert ".tree-kb-label-global" in html
+        assert "border-top" in html
+
+    def test_local_kbs_rendered_before_global(self, server_url):
+        """Local KBs are rendered first, global grouped after."""
+        html = self._get_html(f"{server_url}/")
+        local_pos = html.index("for (const kb of localKBs)")
+        global_pos = html.index("if (globalKBs.length > 0)")
+        assert local_pos < global_pos
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

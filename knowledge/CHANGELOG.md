@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-23 -- [ui] Group global KBs under collapsible "global" folder in viewer sidebar
+
+Global KBs are now grouped under a single "global" super-folder in the sidebar,
+collapsed by default. Local KBs remain at the top level as before.
+
+- UPDATE: `view/skill/scripts/index.html` — split renderTree into renderTree + renderKBSection, group global KBs
+
 ## 2026-03-23 19:33 -- [feature] Add --global mode to kb-bootstrap
 
 Bootstrap can now initialize the global KB config at ~/.claude/knowledge-base/

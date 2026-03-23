@@ -171,6 +171,12 @@ body {
   letter-spacing: 1px;
   color: var(--sidebar-dim);
 }
+.tree-kb-label-global {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+}
 
 .tree-item {
   display: flex;
@@ -942,33 +948,63 @@ function renderTree() {
 
   if (!treeData || !treeData.kbs) return;
 
-  for (const kb of treeData.kbs) {
-    const label = document.createElement("div");
-    label.className = "tree-kb-label";
-    label.textContent = (kb.kb_name || "default") + " \u25BE";
-    label.style.cursor = "pointer";
-    container.appendChild(label);
+  const localKBs = treeData.kbs.filter(kb => !kb.readonly);
+  const globalKBs = treeData.kbs.filter(kb => kb.readonly);
 
-    const kbWrap = document.createElement("div");
-    kbWrap.className = "tree-children open";
-    container.appendChild(kbWrap);
+  // Render local KBs at top level
+  for (const kb of localKBs) {
+    renderKBSection(container, kb);
+  }
 
-    label.addEventListener("click", () => {
-      const isOpen = kbWrap.classList.toggle("open");
-      label.textContent = (kb.kb_name || "default") + (isOpen ? " \u25BE" : " \u25B8");
-      // Load/focus the KB root index
-      if (kb.tree && kb.tree.index) {
-        const path = kb.tree.index.path;
-        if (typeof currentView !== "undefined" && currentView === "graph") focusGraphNode(path);
-        else loadFile(path);
-      }
+  // Render global KBs grouped under a "global" super folder, collapsed by default
+  if (globalKBs.length > 0) {
+    const globalLabel = document.createElement("div");
+    globalLabel.className = "tree-kb-label tree-kb-label-global";
+    globalLabel.textContent = "global \u25B8";
+    globalLabel.style.cursor = "pointer";
+    container.appendChild(globalLabel);
+
+    const globalWrap = document.createElement("div");
+    globalWrap.className = "tree-children"; // no "open" — collapsed by default
+    container.appendChild(globalWrap);
+
+    globalLabel.addEventListener("click", () => {
+      const isOpen = globalWrap.classList.toggle("open");
+      globalLabel.textContent = "global" + (isOpen ? " \u25BE" : " \u25B8");
     });
 
-    if (kb.tree && kb.tree.children) {
-      const sorted = Object.keys(kb.tree.children).sort();
-      for (const key of sorted) {
-        kbWrap.appendChild(buildTreeNode(key, kb.tree.children[key], 0));
-      }
+    for (const kb of globalKBs) {
+      renderKBSection(globalWrap, kb);
+    }
+  }
+}
+
+function renderKBSection(container, kb) {
+  const label = document.createElement("div");
+  label.className = "tree-kb-label";
+  label.textContent = (kb.kb_name || "default") + " \u25BE";
+  label.style.cursor = "pointer";
+  container.appendChild(label);
+
+  const kbWrap = document.createElement("div");
+  kbWrap.className = "tree-children open";
+  container.appendChild(kbWrap);
+
+  label.addEventListener("click", () => {
+    const isOpen = kbWrap.classList.toggle("open");
+    label.textContent = (kb.kb_name || "default") + (isOpen ? " \u25BE" : " \u25B8");
+    // Load/focus the KB root index
+    if (kb.tree && kb.tree.index) {
+      const path = kb.tree.index.path;
+      if (typeof currentView !== "undefined" && currentView === "graph") focusGraphNode(path);
+      else loadFile(path);
+    }
+  });
+
+  if (kb.tree && kb.tree.children) {
+    const sorted = Object.keys(kb.tree.children).sort();
+    for (const key of sorted) {
+      kbWrap.appendChild(buildTreeNode(key, kb.tree.children[key], 0));
     }
   }
 }
