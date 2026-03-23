@@ -18,6 +18,7 @@ import pytest
 
 # Ensure serve module is importable
 from serve import (
+    KBViewerHandler,
     _should_skip,
     create_server,
     fuzzy_match,
@@ -903,6 +904,88 @@ class TestTreeEndpoint:
         except urllib.error.HTTPError as e:
             # 500 is acceptable if kb_loader not found in test project
             assert e.code == 500
+
+# ---------------------------------------------------------------------------
+# Unit tests: _find_kb_loader layouts
+# ---------------------------------------------------------------------------
+
+class TestFindKbLoader:
+    """_find_kb_loader must resolve kb_loader.py across install layouts."""
+
+    def _make_handler(self, project_root, config=None):
+        """Create a minimal handler instance for testing _find_kb_loader."""
+        handler = object.__new__(KBViewerHandler)
+        handler.project_root = str(project_root)
+        handler.kb_config = config or {"kb_roots": []}
+        return handler
+
+    def test_source_repo_layout(self, tmp_path):
+        """find/skill/scripts/kb_loader.py relative to view/skill/scripts/serve.py."""
+        view_scripts = tmp_path / "knowledge" / "view" / "skill" / "scripts"
+        view_scripts.mkdir(parents=True)
+        find_scripts = tmp_path / "knowledge" / "find" / "skill" / "scripts"
+        find_scripts.mkdir(parents=True)
+        (find_scripts / "kb_loader.py").write_text("# stub")
+
+        handler = self._make_handler(tmp_path)
+        with patch("serve.__file__", str(view_scripts / "serve.py")):
+            result = handler._find_kb_loader()
+        assert result is not None
+        assert result.name == "kb_loader.py"
+        assert "find" in str(result)
+
+    def test_claude_skills_sibling_layout(self, tmp_path):
+        """kb-find sibling under .claude/skills/."""
+        view_scripts = tmp_path / ".claude" / "skills" / "kb-view" / "scripts"
+        view_scripts.mkdir(parents=True)
+        find_scripts = tmp_path / ".claude" / "skills" / "kb-find" / "scripts"
+        find_scripts.mkdir(parents=True)
+        (find_scripts / "kb_loader.py").write_text("# stub")
+
+        handler = self._make_handler(tmp_path)
+        with patch("serve.__file__", str(view_scripts / "serve.py")):
+            result = handler._find_kb_loader()
+        assert result is not None
+        assert result.name == "kb_loader.py"
+
+    def test_plugin_layout(self, tmp_path):
+        """skills/find/scripts/ sibling under plugin cache."""
+        view_scripts = tmp_path / "skills" / "view" / "scripts"
+        view_scripts.mkdir(parents=True)
+        find_scripts = tmp_path / "skills" / "find" / "scripts"
+        find_scripts.mkdir(parents=True)
+        (find_scripts / "kb_loader.py").write_text("# stub")
+
+        handler = self._make_handler(tmp_path)
+        with patch("serve.__file__", str(view_scripts / "serve.py")):
+            result = handler._find_kb_loader()
+        assert result is not None
+        assert result.name == "kb_loader.py"
+
+    def test_fallback_to_kb_roots_rglob(self, tmp_path):
+        """Falls back to searching inside kb_roots when sibling paths fail."""
+        config_dir = tmp_path / ".claude" / "knowledge-base"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.json").write_text(json.dumps({
+            "kb_roots": [{"name": "core", "path": "./kb"}]
+        }))
+        kb_scripts = tmp_path / "kb" / "finding" / "skill" / "scripts"
+        kb_scripts.mkdir(parents=True)
+        (kb_scripts / "kb_loader.py").write_text("# stub")
+
+        handler = self._make_handler(tmp_path, load_config(str(tmp_path)))
+        # Patch __file__ to a location where no sibling paths exist
+        with patch("serve.__file__", str(tmp_path / "nowhere" / "serve.py")):
+            result = handler._find_kb_loader()
+        assert result is not None
+        assert result.name == "kb_loader.py"
+
+    def test_returns_none_when_not_found(self, tmp_path):
+        """Returns None when kb_loader.py doesn't exist anywhere."""
+        handler = self._make_handler(tmp_path)
+        with patch("serve.__file__", str(tmp_path / "nowhere" / "serve.py")):
+            result = handler._find_kb_loader()
+        assert result is None
 
 # ---------------------------------------------------------------------------
 # Unit tests: _should_skip

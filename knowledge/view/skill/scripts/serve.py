@@ -398,10 +398,16 @@ class KBViewerHandler(http.server.BaseHTTPRequestHandler):
 
     def _find_kb_loader(self) -> Path | None:
         """Locate kb_loader.py: sibling skill first, then KB paths, then project root."""
-        # Sibling skill: ../../find/skill/scripts/kb_loader.py relative to this script
-        sibling = Path(__file__).resolve().parent / "../../../find/skill/scripts/kb_loader.py"
-        if sibling.resolve().exists():
-            return sibling.resolve()
+        script_dir = Path(__file__).resolve().parent
+        # Try sibling skill in known layouts
+        for candidate_rel in (
+            "../../kb-find/scripts/kb_loader.py",          # .claude/skills/ sibling
+            "../../find/scripts/kb_loader.py",             # plugin layout (skills/find/scripts/)
+            "../../../find/skill/scripts/kb_loader.py",    # source repo layout
+        ):
+            candidate = (script_dir / candidate_rel).resolve()
+            if candidate.exists():
+                return candidate
         # Search inside each configured KB
         for entry in self.kb_config.get("kb_roots", []):
             kb_path = Path(self.project_root) / entry["path"]
