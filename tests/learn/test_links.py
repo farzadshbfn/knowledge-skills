@@ -88,6 +88,111 @@ class TestCheckBrokenLinks:
         files = {"topic/note.md": "See [@ios/other.md](@ios/other.md)."}
         assert not any(i.check == "broken_link" for i in check_broken_links(files))
 
+class TestExtractMdLinksSpacesAndBrackets:
+    """Test link extraction with spaces and [id] prefixed names."""
+
+    def test_link_target_with_spaces(self):
+        content = "See [note](my dir/note.md) here."
+        assert extract_md_links(content) == [(1, "my dir/note.md")]
+
+    def test_link_target_with_bracket_id(self):
+        content = "See [note]([1] concepts/note.md) here."
+        assert extract_md_links(content) == [(1, "[1] concepts/note.md")]
+
+    def test_link_target_with_bracket_id_and_spaces(self):
+        content = "See [note]([42] my topic/note.md) here."
+        assert extract_md_links(content) == [(1, "[42] my topic/note.md")]
+
+    def test_link_text_with_bracket_id(self):
+        """Link text containing [id] — brackets in text break naive [^\\]]*."""
+        content = "See [[1] concepts]([1] concepts/index.md) here."
+        assert extract_md_links(content) == [(1, "[1] concepts/index.md")]
+
+    def test_link_text_with_backtick_bracket_id(self):
+        content = "See [`[1] concepts`]([1] concepts/index.md) here."
+        assert extract_md_links(content) == [(1, "[1] concepts/index.md")]
+
+    def test_multiple_bracket_id_links(self):
+        content = "[a]([1] dir/a.md) and [b]([2] dir/b.md)"
+        assert extract_md_links(content) == [(1, "[1] dir/a.md"), (1, "[2] dir/b.md")]
+
+
+class TestNormalizePathSpacesAndBrackets:
+    """Test path normalization with spaces and [id] prefixed names."""
+
+    def test_space_in_directory(self):
+        assert normalize_path("my topic", "note.md") == "my topic/note.md"
+
+    def test_bracket_id_directory(self):
+        assert normalize_path("[1] concepts", "note.md") == "[1] concepts/note.md"
+
+    def test_parent_traversal_with_bracket_id(self):
+        assert normalize_path("[1] concepts", "../[2] other/note.md") == "[2] other/note.md"
+
+    def test_bracket_id_in_link(self):
+        assert normalize_path("topic", "[1] sub/note.md") == "topic/[1] sub/note.md"
+
+
+class TestCheckBrokenLinksSpacesAndBrackets:
+    """Test broken link detection with spaces and [id] prefixed names."""
+
+    def test_space_in_path_not_broken(self):
+        files = {
+            "my topic/index.md": "See [note](note.md).",
+            "my topic/note.md": "Content.",
+        }
+        assert check_broken_links(files) == []
+
+    def test_bracket_id_path_not_broken(self):
+        files = {
+            "[1] concepts/index.md": "See [note](note.md).",
+            "[1] concepts/note.md": "Content.",
+        }
+        assert check_broken_links(files) == []
+
+    def test_cross_dir_bracket_id_not_broken(self):
+        files = {
+            "[1] concepts/index.md": "See [other](../[2] patterns/note.md).",
+            "[2] patterns/note.md": "Content.",
+        }
+        assert check_broken_links(files) == []
+
+    def test_bracket_id_in_link_target_not_broken(self):
+        files = {
+            "topic/index.md": "See [note](../[1] concepts/note.md).",
+            "[1] concepts/note.md": "Content.",
+        }
+        assert check_broken_links(files) == []
+
+    def test_bracket_id_broken_still_detected(self):
+        files = {
+            "[1] concepts/index.md": "See [note](missing.md).",
+        }
+        issues = check_broken_links(files)
+        assert len(issues) == 1
+        assert issues[0].check == "broken_link"
+
+
+class TestCheckWikilinksSpacesAndBrackets:
+    """Test wikilink detection doesn't false-positive on [id] patterns."""
+
+    def test_bracket_id_link_not_flagged_as_wikilink(self):
+        """A markdown link with [id] in text should not be a wikilink false-positive."""
+        files = {"a/note.md": "See [[1] concepts]([1] concepts/index.md)."}
+        issues = check_wikilinks(files)
+        assert not any(i.check == "wikilink" for i in issues)
+
+    def test_bracket_id_in_target_not_flagged(self):
+        files = {"a/note.md": "See [note]([1] concepts/index.md)."}
+        assert check_wikilinks(files) == []
+
+    def test_actual_wikilink_still_detected_near_bracket_ids(self):
+        files = {"a/note.md": "See [note]([1] dir/a.md) and [[real-wiki]]."}
+        issues = check_wikilinks(files)
+        assert len(issues) == 1
+        assert issues[0].check == "wikilink"
+
+
 class TestCheckWikilinks:
     def test_no_wikilinks(self):
         files = {"a/note.md": "Normal [link](other.md)."}

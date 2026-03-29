@@ -264,7 +264,7 @@ def extract_md_links(content: str) -> list[tuple[int, str]]:
         if in_fenced:
             continue
         cleaned = re.sub(r"`[^`]*`", "", line)
-        for m in re.finditer(r"\[([^\]]*)\]\(([^)]+\.md)\)", cleaned):
+        for m in re.finditer(r"\[((?:[^\[\]]|\[[^\]]*\])*)\]\(([^)]+\.md)\)", cleaned):
             links.append((line_num, m.group(2)))
 
     return links
