@@ -6,6 +6,7 @@ the hook logs them, and at the right moment a systemMessage nudge fires.
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -268,6 +269,78 @@ class TestScenarioNudgeOnlyOnce:
                 assert "lib/payments" in msg["systemMessage"]
 
         assert nudge_count == 1
+
+class TestScenarioGlobalKBRead:
+    """Cross-project reads of global KB topics are tracked in the shared log."""
+
+    def _setup_global_env(self, tmp_path, monkeypatch):
+        """Create a global KB source and configure monkeypatches."""
+        source = tmp_path / "global-source"
+        kb_dir = source / "knowledge" / "swift-concurrency"
+        kb_dir.mkdir(parents=True)
+        (kb_dir / "overview.md").write_text("# Overview\n")
+        (kb_dir / "actors.md").write_text("# Actors\n")
+        (kb_dir / "tasks.md").write_text("# Tasks\n")
+
+        src_config_dir = source / ".claude" / "knowledge-base"
+        src_config_dir.mkdir(parents=True)
+        (src_config_dir / "config.json").write_text(json.dumps({
+            "kb_roots": [{"name": "core", "path": "./knowledge"}]
+        }))
+
+        home_dir = tmp_path / "home"
+        global_config_dir = home_dir / ".claude" / "knowledge-base"
+        global_config_dir.mkdir(parents=True)
+        (global_config_dir / "config.json").write_text(json.dumps({
+            "namespace": "god",
+            "source": str(source),
+        }))
+
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_DIR", str(global_config_dir),
+        )
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_FILE",
+            str(global_config_dir / "access-log.jsonl"),
+        )
+        return source, home_dir
+
+    def test_two_projects_reading_same_global_topic(self, tmp_path, monkeypatch, capsys):
+        """Reads from two different projects appear in the shared log."""
+        source, home_dir = self._setup_global_env(tmp_path, monkeypatch)
+        monkeypatch.setattr("track_kb_access._find_memory_dir", lambda cwd: None)
+
+        # Project A reads
+        proj_a = tmp_path / "project-a"
+        proj_a.mkdir()
+        setup_kb_config(proj_a)
+        simulate_read(monkeypatch, str(proj_a),
+                      str(source / "knowledge" / "swift-concurrency" / "overview.md"),
+                      session_id="sess-proj-a")
+
+        # Project B reads
+        proj_b = tmp_path / "project-b"
+        proj_b.mkdir()
+        setup_kb_config(proj_b)
+        simulate_read(monkeypatch, str(proj_b),
+                      str(source / "knowledge" / "swift-concurrency" / "actors.md"),
+                      session_id="sess-proj-b")
+
+        # Shared log should have entries from both projects
+        global_log = home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        lines = [json.loads(l) for l in global_log.read_text().strip().split("\n") if l]
+        assert len(lines) == 2
+        projects = {e["source_project"] for e in lines}
+        assert projects == {"project-a", "project-b"}
+        assert all(e["topic"] == "swift-concurrency" for e in lines)
+
+        # Neither project should have a local log entry for the global read
+        for proj in [proj_a, proj_b]:
+            local_log = proj / ".claude" / "knowledge-base" / "access-log.jsonl"
+            assert not local_log.exists()
+
 
 class TestScenarioDeepNesting:
     """Reads deep in the tree cluster at the right level."""

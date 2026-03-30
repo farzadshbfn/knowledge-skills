@@ -2,12 +2,15 @@
 
 import io
 import json
+import os
 import sys
 
 import pytest
 from track_kb_access import (
+    detect_global_kb_topic,
     extract_topic,
     is_gated,
+    log_global_kb_read,
     main,
     topic_has_skill,
     trim_old_entries,
@@ -18,6 +21,7 @@ from monitor_helpers import (
     MEMORY_WITH_GATES,
     make_log_entry,
     setup_access_log,
+    setup_global_config,
     setup_kb_config,
     setup_memory_dir,
     setup_topic_with_skill,
@@ -304,6 +308,159 @@ class TestCheckMidSession:
         assert capsys.readouterr().out == ""
 
 # ===================================================================
+# detect_global_kb_topic
+# ===================================================================
+
+def _setup_global_kb(tmp_path):
+    """Set up a mock global KB source project at tmp_path/global-source."""
+    source = tmp_path / "global-source"
+    kb_dir = source / "knowledge" / "swift-concurrency"
+    kb_dir.mkdir(parents=True)
+    (kb_dir / "overview.md").write_text("# Overview\n")
+    (kb_dir / "actors.md").write_text("# Actors\n")
+    # Source project config
+    src_config_dir = source / ".claude" / "knowledge-base"
+    src_config_dir.mkdir(parents=True)
+    (src_config_dir / "config.json").write_text(json.dumps({
+        "kb_roots": [{"name": "core", "path": "./knowledge"}]
+    }))
+    # Global config pointing to source
+    home_dir = tmp_path / "home"
+    global_config_dir = home_dir / ".claude" / "knowledge-base"
+    global_config_dir.mkdir(parents=True)
+    (global_config_dir / "config.json").write_text(json.dumps({
+        "namespace": "god",
+        "source": str(source),
+    }))
+    return source, home_dir
+
+
+class TestDetectGlobalKBTopic:
+    def test_file_under_global_kb_root(self, tmp_path, monkeypatch):
+        source, home_dir = _setup_global_kb(tmp_path)
+        monkeypatch.setenv("HOME", str(home_dir))
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+
+        abs_path = str(source / "knowledge" / "swift-concurrency" / "overview.md")
+        result = detect_global_kb_topic(abs_path)
+        assert result is not None
+        topic, rel_path = result
+        assert topic == "swift-concurrency"
+        assert rel_path == "swift-concurrency/overview.md"
+
+    def test_file_not_under_global_kb(self, tmp_path, monkeypatch):
+        _source, home_dir = _setup_global_kb(tmp_path)
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+
+        result = detect_global_kb_topic("/some/random/file.md")
+        assert result is None
+
+    def test_missing_global_config(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "empty-home"
+        home_dir.mkdir()
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+
+        result = detect_global_kb_topic("/any/path.md")
+        assert result is None
+
+    def test_missing_source_config(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "home"
+        global_config_dir = home_dir / ".claude" / "knowledge-base"
+        global_config_dir.mkdir(parents=True)
+        (global_config_dir / "config.json").write_text(json.dumps({
+            "namespace": "god",
+            "source": str(tmp_path / "nonexistent"),
+        }))
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+
+        result = detect_global_kb_topic("/any/path.md")
+        assert result is None
+
+    def test_root_level_file_not_detected(self, tmp_path, monkeypatch):
+        source, home_dir = _setup_global_kb(tmp_path)
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        # Root-level file (single segment after KB root)
+        (source / "knowledge" / "CHANGELOG.md").write_text("# Changelog\n")
+        result = detect_global_kb_topic(str(source / "knowledge" / "CHANGELOG.md"))
+        assert result is None
+
+
+# ===================================================================
+# log_global_kb_read
+# ===================================================================
+
+class TestLogGlobalKBRead:
+    def test_creates_entry_in_global_log(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_DIR",
+            str(home_dir / ".claude" / "knowledge-base"),
+        )
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+
+        log_global_kb_read("swift-concurrency", "swift-concurrency/overview.md",
+                           "sess1234", "/Users/me/my-project")
+
+        log_file = home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        assert log_file.exists()
+        entry = json.loads(log_file.read_text().strip())
+        assert entry["topic"] == "swift-concurrency"
+        assert entry["path"] == "swift-concurrency/overview.md"
+        assert entry["sid"] == "sess1234"
+        assert entry["source_project"] == "my-project"
+        assert "ts" in entry
+
+    def test_appends_to_existing_log(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "home"
+        log_dir = home_dir / ".claude" / "knowledge-base"
+        log_dir.mkdir(parents=True)
+        log_file = log_dir / "access-log.jsonl"
+        log_file.write_text(json.dumps({"ts": "old", "topic": "old"}) + "\n")
+
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr("track_kb_access.GLOBAL_LOG_DIR", str(log_dir))
+        monkeypatch.setattr("track_kb_access.GLOBAL_LOG_FILE", str(log_file))
+
+        log_global_kb_read("new-topic", "new-topic/note.md", "sess5678", "/tmp/proj")
+
+        lines = [l for l in log_file.read_text().strip().split("\n") if l]
+        assert len(lines) == 2
+        assert json.loads(lines[1])["topic"] == "new-topic"
+
+    def test_source_project_is_basename(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_DIR",
+            str(home_dir / ".claude" / "knowledge-base"),
+        )
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+
+        log_global_kb_read("topic", "topic/a.md", "sid", "/Users/me/deep/nested/project")
+
+        log_file = home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        entry = json.loads(log_file.read_text().strip())
+        assert entry["source_project"] == "project"
+
+
+# ===================================================================
 # main (integration)
 # ===================================================================
 
@@ -401,3 +558,73 @@ class TestMain:
         entry = json.loads(log_file.read_text().strip())
         assert entry["topic"] == "my-topic"
         assert entry["path"] == "knowledge/my-topic/deep/note.md"
+
+    def test_global_kb_read_logged_to_shared_log(self, tmp_path, monkeypatch):
+        """Reading a global KB file creates an entry in the shared log, not the local log."""
+        source, home_dir = _setup_global_kb(tmp_path)
+        project_dir = tmp_path / "my-project"
+        project_dir.mkdir()
+        setup_kb_config(project_dir)
+
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_DIR",
+            str(home_dir / ".claude" / "knowledge-base"),
+        )
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+
+        data = {
+            "session_id": "test-session-id-12345",
+            "cwd": str(project_dir),
+            "tool_input": {
+                "file_path": str(source / "knowledge" / "swift-concurrency" / "overview.md"),
+            },
+        }
+        result = self._run_main(monkeypatch, data)
+        assert result == 0
+
+        # Shared log should have the entry
+        global_log = home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        assert global_log.exists()
+        entry = json.loads(global_log.read_text().strip())
+        assert entry["topic"] == "swift-concurrency"
+        assert entry["source_project"] == "my-project"
+
+        # Local log should NOT have an entry
+        local_log = project_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        assert not local_log.exists()
+
+    def test_local_kb_read_does_not_create_shared_entry(self, tmp_path, monkeypatch):
+        """Local KB reads go to local log only — no shared log entry."""
+        _source, home_dir = _setup_global_kb(tmp_path)
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "track_kb_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+
+        setup_kb_config(tmp_path)
+        monkeypatch.setattr("track_kb_access._find_memory_dir", lambda cwd: None)
+        cwd = str(tmp_path)
+        data = {
+            "session_id": "sess123",
+            "cwd": cwd,
+            "tool_input": {
+                "file_path": f"{cwd}/knowledge/my-topic/note.md",
+            },
+        }
+        self._run_main(monkeypatch, data)
+
+        # Local log should have the entry
+        local_log = tmp_path / ".claude" / "knowledge-base" / "access-log.jsonl"
+        assert local_log.exists()
+        assert json.loads(local_log.read_text().strip())["topic"] == "my-topic"
+
+        # Shared log should NOT exist
+        global_log = home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"
+        assert not global_log.exists()

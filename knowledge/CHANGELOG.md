@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-30 -- [feature] Cross-project global KB read aggregation
+
+When a project reads from the global KB, the read is now logged to a shared
+access log at ~/.claude/knowledge-base/access-log.jsonl (with source_project
+attribution). analyze_access.py auto-detects when running inside the global KB
+source project and merges the shared log, enabling cross-project skill candidate
+detection. New --include-global CLI flag for explicit control.
+
+- ADD: `monitor/skill/scripts/track_kb_access.py` — detect_global_kb_topic(), log_global_kb_read()
+- UPDATE: `monitor/skill/scripts/track_kb_access.py` — main() falls back to global detection for out-of-project paths
+- ADD: `monitor/skill/scripts/analyze_access.py` — is_global_kb_source(), load_global_log(), _load_jsonl()
+- UPDATE: `monitor/skill/scripts/analyze_access.py` — TopicStats.source_projects, load_log include_global, format_context/format_json cross-project info
+
 ## 2026-03-23 -- [ui] Group global KBs under collapsible "global" folder in viewer sidebar
 
 Global KBs are now grouped under a single "global" super-folder in the sidebar,

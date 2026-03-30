@@ -21,6 +21,8 @@ from pathlib import Path
 
 LOG_DIR = ".claude/knowledge-base"
 LOG_FILE = f"{LOG_DIR}/access-log.jsonl"
+GLOBAL_LOG_DIR = os.path.join(os.path.expanduser("~"), ".claude/knowledge-base")
+GLOBAL_LOG_FILE = os.path.join(GLOBAL_LOG_DIR, "access-log.jsonl")
 MAX_AGE_DAYS = 30
 IN_SESSION_THRESHOLD_KB = 3
 IN_SESSION_THRESHOLD_CODE = 5
@@ -52,10 +54,18 @@ def main() -> int:
     except ValueError:
         return 0
 
-    # Determine what kind of read this is: KB topic or code module
+    # Determine what kind of read this is: KB topic, global KB, or code module
     topic = extract_topic(rel_path, cwd)
     kind = "kb"
     if not topic:
+        # Check global KB before code module (global paths start with "..")
+        if rel_path.startswith(".."):
+            global_result = detect_global_kb_topic(file_path)
+            if global_result:
+                global_topic, global_rel = global_result
+                sid = session_id[:8] if session_id else ""
+                log_global_kb_read(global_topic, global_rel, sid, cwd)
+                return 0
         topic = extract_code_module(rel_path, cwd)
         kind = "code"
     if not topic:
@@ -86,6 +96,73 @@ def main() -> int:
     check_mid_session(log_file, sid, topic, cwd, kind=kind)
 
     return 0
+
+
+def _resolve_home(path: str) -> str:
+    """Resolve ~ prefix in a path."""
+    if path.startswith("~/"):
+        return os.path.join(os.path.expanduser("~"), path[2:])
+    return path
+
+
+def detect_global_kb_topic(abs_path: str) -> tuple[str, str] | None:
+    """Check if abs_path is under a global KB root.
+
+    Returns (topic_name, rel_path_within_kb_root) or None.
+    """
+    global_config_path = os.path.join(
+        os.path.expanduser("~"), ".claude/knowledge-base/config.json"
+    )
+    try:
+        with open(global_config_path) as f:
+            global_config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    source = global_config.get("source", "")
+    if not source:
+        return None
+    source = _resolve_home(source)
+
+    source_config_path = os.path.join(source, ".claude/knowledge-base/config.json")
+    try:
+        with open(source_config_path) as f:
+            source_config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    norm_abs = os.path.realpath(abs_path)
+    for entry in source_config.get("kb_roots", []):
+        kb_path = entry["path"]
+        if kb_path.startswith("./"):
+            kb_path = os.path.join(source, kb_path[2:])
+        elif not kb_path.startswith("/"):
+            kb_path = os.path.join(source, kb_path)
+        kb_path = os.path.realpath(kb_path)
+
+        if norm_abs.startswith(kb_path + "/"):
+            rel = norm_abs[len(kb_path) + 1:]
+            parts = rel.split("/")
+            if len(parts) >= 2:
+                return (parts[0], rel)
+    return None
+
+
+def log_global_kb_read(
+    topic: str, rel_path: str, sid: str, cwd: str
+) -> None:
+    """Append a read entry to the shared global KB access log."""
+    os.makedirs(GLOBAL_LOG_DIR, exist_ok=True)
+    entry = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "sid": sid,
+        "topic": topic,
+        "path": rel_path,
+        "source_project": os.path.basename(cwd),
+    }
+    with open(GLOBAL_LOG_FILE, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    trim_old_entries(GLOBAL_LOG_FILE)
 
 
 def extract_topic(rel_path: str, cwd: str) -> str | None:

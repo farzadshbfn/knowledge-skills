@@ -19,6 +19,7 @@ from pathlib import Path
 
 
 LOG_FILE = ".claude/knowledge-base/access-log.jsonl"
+GLOBAL_LOG_FILE = os.path.join(os.path.expanduser("~"), ".claude/knowledge-base/access-log.jsonl")
 DEFAULT_CANDIDATE_SESSIONS = 3
 DEFAULT_CANDIDATE_READS = 9
 
@@ -34,6 +35,7 @@ class TopicStats:
     reads: int = 0
     last_read: str = ""
     has_skill: bool = False
+    source_projects: int = 0
 
 
 @dataclass
@@ -55,12 +57,20 @@ class AnalysisResult:
 # Log loading and aggregation
 # ---------------------------------------------------------------------------
 
-def load_log(cwd: str) -> list[dict]:
-    """Load and parse the access log."""
+def load_log(cwd: str, include_global: bool = False) -> list[dict]:
+    """Load and parse the access log, optionally merging the global shared log."""
     log_path = os.path.join(cwd, LOG_FILE)
+    entries = _load_jsonl(log_path)
+    if include_global:
+        entries.extend(load_global_log())
+    return entries
+
+
+def _load_jsonl(path: str) -> list[dict]:
+    """Load entries from a JSONL file."""
     entries = []
     try:
-        with open(log_path) as f:
+        with open(path) as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -73,11 +83,34 @@ def load_log(cwd: str) -> list[dict]:
     return entries
 
 
+def load_global_log() -> list[dict]:
+    """Load the shared global KB access log."""
+    return _load_jsonl(GLOBAL_LOG_FILE)
+
+
+def is_global_kb_source(cwd: str) -> bool:
+    """Check if cwd is the source project for the global KB."""
+    home = os.path.expanduser("~")
+    global_config_path = os.path.join(home, ".claude/knowledge-base/config.json")
+    try:
+        with open(global_config_path) as f:
+            config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return False
+    source = config.get("source", "")
+    if not source:
+        return False
+    if source.startswith("~/"):
+        source = os.path.join(home, source[2:])
+    return os.path.realpath(cwd) == os.path.realpath(source)
+
+
 def compute_topic_stats(entries: list[dict], cwd: str) -> list[TopicStats]:
     """Aggregate entries by topic."""
     topic_sessions: dict[str, set[str]] = defaultdict(set)
     topic_reads: dict[str, int] = defaultdict(int)
     topic_last: dict[str, str] = {}
+    topic_projects: dict[str, set[str]] = defaultdict(set)
 
     for entry in entries:
         topic = entry.get("topic", "")
@@ -88,6 +121,9 @@ def compute_topic_stats(entries: list[dict], cwd: str) -> list[TopicStats]:
             topic_reads[topic] += 1
             if ts > topic_last.get(topic, ""):
                 topic_last[topic] = ts
+            project = entry.get("source_project", "")
+            if project:
+                topic_projects[topic].add(project)
 
     stats = []
     for topic in sorted(
@@ -99,6 +135,7 @@ def compute_topic_stats(entries: list[dict], cwd: str) -> list[TopicStats]:
             reads=topic_reads[topic],
             last_read=topic_last.get(topic, ""),
             has_skill=_topic_has_skill(topic, cwd),
+            source_projects=len(topic_projects.get(topic, set())),
         ))
     return stats
 
@@ -172,10 +209,17 @@ def analyze(
     include_top: bool = False,
     include_candidates: bool = False,
     include_health: bool = False,
+    include_global: bool | None = None,
 ) -> AnalysisResult:
-    """Run analysis and return results."""
+    """Run analysis and return results.
+
+    When include_global is None (default), auto-detects by checking if cwd
+    is the global KB source project.
+    """
     result = AnalysisResult()
-    entries = load_log(cwd)
+    if include_global is None:
+        include_global = is_global_kb_source(cwd)
+    entries = load_log(cwd, include_global=include_global)
     stats = compute_topic_stats(entries, cwd)
 
     if include_top:
@@ -197,13 +241,19 @@ def format_json(result: AnalysisResult) -> str:
     output: dict = {}
     if result.top_topics:
         output["top_topics"] = [
-            {"topic": s.topic, "sessions": s.sessions, "reads": s.reads,
-             "has_skill": s.has_skill}
+            {
+                "topic": s.topic, "sessions": s.sessions, "reads": s.reads,
+                "has_skill": s.has_skill,
+                **({"source_projects": s.source_projects} if s.source_projects else {}),
+            }
             for s in result.top_topics
         ]
     if result.candidates:
         output["candidates"] = [
-            {"topic": s.topic, "sessions": s.sessions, "reads": s.reads}
+            {
+                "topic": s.topic, "sessions": s.sessions, "reads": s.reads,
+                **({"source_projects": s.source_projects} if s.source_projects else {}),
+            }
             for s in result.candidates
         ]
     if result.health:
@@ -225,6 +275,8 @@ def format_context(result: AnalysisResult) -> str:
         n = len(result.candidates)
         top = result.candidates[0]
         detail = f"{top.topic}/ ({top.sessions} sessions, {top.reads} reads"
+        if top.source_projects > 1:
+            detail += f", {top.source_projects} projects"
         if n > 1:
             detail += f", +{n - 1} more"
         detail += " — no memory block)"
@@ -331,6 +383,10 @@ def main(argv: list[str] | None = None) -> int:
         "--format", choices=["json", "context"], default="json",
         help="Output format (default: json)"
     )
+    parser.add_argument(
+        "--include-global", action="store_true",
+        help="Include cross-project reads from global KB shared log"
+    )
     args = parser.parse_args(argv)
 
     # Default to all if nothing specified
@@ -345,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         include_top=args.top_topics,
         include_candidates=args.candidates,
         include_health=args.health,
+        include_global=True if args.include_global else None,
     )
 
     if args.format == "context":

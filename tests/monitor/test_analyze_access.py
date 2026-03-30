@@ -1,6 +1,7 @@
 """Tests for analyze_access.py — KB access log analysis CLI."""
 
 import json
+import os
 import sys
 
 import pytest
@@ -13,6 +14,8 @@ from analyze_access import (
     find_candidates,
     format_context,
     format_json,
+    is_global_kb_source,
+    load_global_log,
     load_health,
     load_log,
     main,
@@ -20,8 +23,11 @@ from analyze_access import (
 from monitor_helpers import (
     MEMORY_EMPTY,
     MEMORY_WITH_GATES,
+    make_global_log_entry,
     make_log_entry,
     setup_access_log,
+    setup_global_access_log,
+    setup_global_config,
     setup_kb_config,
     setup_memory_dir,
     setup_topic_with_skill,
@@ -62,6 +68,64 @@ class TestLoadLog:
     def test_missing_file(self, tmp_path):
         entries = load_log(str(tmp_path))
         assert entries == []
+
+# ===================================================================
+# is_global_kb_source
+# ===================================================================
+
+class TestIsGlobalKBSource:
+    def test_matching_source(self, tmp_path, monkeypatch):
+        source_dir = tmp_path / "source-project"
+        source_dir.mkdir()
+        home_dir = tmp_path / "home"
+        setup_global_config(home_dir, str(source_dir))
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        assert is_global_kb_source(str(source_dir)) is True
+
+    def test_different_project(self, tmp_path, monkeypatch):
+        source_dir = tmp_path / "source-project"
+        source_dir.mkdir()
+        other_dir = tmp_path / "other-project"
+        other_dir.mkdir()
+        home_dir = tmp_path / "home"
+        setup_global_config(home_dir, str(source_dir))
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        assert is_global_kb_source(str(other_dir)) is False
+
+    def test_missing_global_config(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "empty-home"
+        home_dir.mkdir()
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        assert is_global_kb_source(str(tmp_path)) is False
+
+# ===================================================================
+# load_global_log
+# ===================================================================
+
+class TestLoadGlobalLog:
+    def test_loads_entries(self, tmp_path, monkeypatch):
+        home_dir = tmp_path / "home"
+        setup_global_access_log(home_dir, [
+            make_global_log_entry("topic-a", source_project="proj1"),
+            make_global_log_entry("topic-b", source_project="proj2"),
+        ])
+        monkeypatch.setattr(
+            "analyze_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+        entries = load_global_log()
+        assert len(entries) == 2
+        assert entries[0]["source_project"] == "proj1"
+
+    def test_missing_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "analyze_access.GLOBAL_LOG_FILE",
+            str(tmp_path / "nonexistent.jsonl"),
+        )
+        assert load_global_log() == []
 
 # ===================================================================
 # compute_topic_stats
@@ -131,6 +195,22 @@ class TestComputeTopicStats:
         setup_kb_config(tmp_path)
         stats = compute_topic_stats([], str(tmp_path))
         assert stats == []
+
+    def test_source_projects_counted(self, tmp_path):
+        setup_kb_config(tmp_path)
+        entries = [
+            make_global_log_entry("topic-a", sid="s1", source_project="proj1"),
+            make_global_log_entry("topic-a", sid="s2", source_project="proj2"),
+            make_global_log_entry("topic-a", sid="s3", source_project="proj1"),
+        ]
+        stats = compute_topic_stats(entries, str(tmp_path))
+        assert stats[0].source_projects == 2
+
+    def test_no_source_project_field_zero(self, tmp_path):
+        setup_kb_config(tmp_path)
+        entries = [make_log_entry("topic-a", sid="s1")]
+        stats = compute_topic_stats(entries, str(tmp_path))
+        assert stats[0].source_projects == 0
 
 # ===================================================================
 # find_candidates
@@ -269,6 +349,20 @@ class TestFormatJson:
         parsed = json.loads(format_json(result))
         assert parsed["health"][0]["corrections"] == 3
 
+    def test_source_projects_in_top_topics(self):
+        result = AnalysisResult(
+            top_topics=[TopicStats("t", sessions=5, reads=20, source_projects=3)]
+        )
+        parsed = json.loads(format_json(result))
+        assert parsed["top_topics"][0]["source_projects"] == 3
+
+    def test_source_projects_omitted_when_zero(self):
+        result = AnalysisResult(
+            top_topics=[TopicStats("t", sessions=5, reads=20, source_projects=0)]
+        )
+        parsed = json.loads(format_json(result))
+        assert "source_projects" not in parsed["top_topics"][0]
+
     def test_empty_result(self):
         result = AnalysisResult()
         parsed = json.loads(format_json(result))
@@ -355,6 +449,20 @@ class TestFormatContext:
         )
         assert format_context(result) == ""
 
+    def test_cross_project_info_shown(self):
+        result = AnalysisResult(
+            candidates=[TopicStats("topic-a", sessions=8, reads=23, source_projects=3)]
+        )
+        ctx = format_context(result)
+        assert "3 projects" in ctx
+
+    def test_single_project_no_project_info(self):
+        result = AnalysisResult(
+            candidates=[TopicStats("topic-a", sessions=8, reads=23, source_projects=1)]
+        )
+        ctx = format_context(result)
+        assert "project" not in ctx
+
 # ===================================================================
 # analyze (integration)
 # ===================================================================
@@ -395,6 +503,86 @@ class TestAnalyze:
         assert len(result.top_topics) == 1
         assert result.candidates == []
         assert result.health == []
+
+# ===================================================================
+# analyze with global log
+# ===================================================================
+
+class TestAnalyzeWithGlobal:
+    def test_auto_detects_global_source(self, tmp_path, monkeypatch):
+        """When cwd is the global KB source, shared log is auto-included."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        setup_kb_config(source_dir)
+        setup_access_log(source_dir, [make_log_entry("local-topic", sid="s1")])
+
+        home_dir = tmp_path / "home"
+        setup_global_config(home_dir, str(source_dir))
+        setup_global_access_log(home_dir, [
+            make_global_log_entry("global-topic", sid="s2", source_project="proj-a"),
+        ])
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "analyze_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+        monkeypatch.setattr("analyze_access._find_memory_dir", lambda cwd: None)
+
+        result = analyze(str(source_dir), include_top=True)
+        topics = {s.topic for s in result.top_topics}
+        assert "local-topic" in topics
+        assert "global-topic" in topics
+
+    def test_non_source_excludes_global(self, tmp_path, monkeypatch):
+        """Projects that aren't the global source don't auto-include shared log."""
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        setup_kb_config(other_dir)
+        setup_access_log(other_dir, [make_log_entry("local-only", sid="s1")])
+
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        home_dir = tmp_path / "home"
+        setup_global_config(home_dir, str(source_dir))
+        setup_global_access_log(home_dir, [
+            make_global_log_entry("should-not-appear", sid="s2"),
+        ])
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "analyze_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+        monkeypatch.setattr("analyze_access._find_memory_dir", lambda cwd: None)
+
+        result = analyze(str(other_dir), include_top=True)
+        topics = {s.topic for s in result.top_topics}
+        assert "local-only" in topics
+        assert "should-not-appear" not in topics
+
+    def test_explicit_include_global_flag(self, tmp_path, monkeypatch):
+        """Explicit include_global=True forces shared log inclusion."""
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        setup_kb_config(other_dir)
+        setup_access_log(other_dir, [])
+
+        home_dir = tmp_path / "home"
+        setup_global_access_log(home_dir, [
+            make_global_log_entry("forced-global", sid="s1"),
+        ])
+        monkeypatch.setattr("os.path.expanduser",
+                            lambda p: p.replace("~", str(home_dir)))
+        monkeypatch.setattr(
+            "analyze_access.GLOBAL_LOG_FILE",
+            str(home_dir / ".claude" / "knowledge-base" / "access-log.jsonl"),
+        )
+        monkeypatch.setattr("analyze_access._find_memory_dir", lambda cwd: None)
+
+        result = analyze(str(other_dir), include_top=True, include_global=True)
+        topics = {s.topic for s in result.top_topics}
+        assert "forced-global" in topics
 
 # ===================================================================
 # main (CLI)

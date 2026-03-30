@@ -61,6 +61,44 @@ def make_log_entry(
         entry["kind"] = kind
     return entry
 
+def setup_global_config(
+    tmp_path: Path, source_path: str, namespace: str = "god"
+) -> Path:
+    """Create a mock global KB config at {tmp_path}/.claude/knowledge-base/config.json."""
+    config_dir = tmp_path / ".claude" / "knowledge-base"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file = config_dir / "config.json"
+    config_file.write_text(json.dumps({
+        "namespace": namespace,
+        "source": source_path,
+    }))
+    return config_file
+
+def setup_global_access_log(tmp_path: Path, entries: list[dict]) -> Path:
+    """Create a shared global access log at {tmp_path}/.claude/knowledge-base/access-log.jsonl."""
+    log_dir = tmp_path / ".claude" / "knowledge-base"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "access-log.jsonl"
+    lines = [json.dumps(e) for e in entries]
+    log_file.write_text("\n".join(lines) + ("\n" if lines else ""))
+    return log_file
+
+def make_global_log_entry(
+    topic: str,
+    sid: str = "abc12345",
+    ts: str = "2026-03-14T10:00:00",
+    path: str = "",
+    source_project: str = "project-a",
+) -> dict:
+    """Create a global access log entry dict with source_project field."""
+    if not path:
+        path = f"{topic}/index.md"
+    return {
+        "ts": ts, "sid": sid, "topic": topic,
+        "path": path, "source_project": source_project,
+    }
+
+
 MEMORY_WITH_GATES = """\
 ---
 name: kb-monitoring-observations
