@@ -1,11 +1,5 @@
 # Changelog
 
-## 2026-04-09 -- [fix] Remove CLAUDE_SKILL_DIR frontmatter workaround from bootstrap
-
-Claude Code now substitutes `${CLAUDE_SKILL_DIR}` in skill frontmatter hooks
-(issue #36135 fixed). Removed bootstrap section 6b that rewrote frontmatter
-with concrete paths. Skill hooks use `${CLAUDE_SKILL_DIR}` natively now.
-
 ## 2026-03-30 -- [feature] Cross-project global KB read aggregation
 
 When a project reads from the global KB, the read is now logged to a shared
