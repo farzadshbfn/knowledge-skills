@@ -73,9 +73,9 @@ If `$ARGS` provides a path, use it. Otherwise, ask the user using AskUserQuestio
 
 Read the project's `CLAUDE.md` (if it exists). Append the content from [assets/claude-md-snippet.md](assets/claude-md-snippet.md) — do NOT replace existing content. If the file doesn't exist, create it with only the snippet content.
 
-## 6. Install Skill Hooks
+## 6. Suggest Optional Hooks
 
-Install PostToolUse validation hooks directly into skill SKILL.md frontmatters so they work automatically when the skill runs.
+Skill frontmatters already include PostToolUse validation hooks using `${CLAUDE_SKILL_DIR}` — these work automatically. This section offers optional hooks for settings.json (monitoring + catch-all validation).
 
 ### 6a. Locate installed skills
 
@@ -88,20 +88,9 @@ Output is JSON with these fields:
 
 **If the script exits with code 1**: `kb-learn` is missing — stop and tell the user KB skills are not installed.
 
-**If monitoring paths are null**: tell the user monitoring features won't be available (6c will be skipped).
+**If monitoring paths are null**: tell the user monitoring features won't be available (6b will be skipped).
 
-### 6b. Update skill frontmatters
-
-The skills ship with PostToolUse validation hooks in their frontmatter using `${CLAUDE_SKILL_DIR}` paths (which may not be substituted in frontmatter yet — see [#36135](https://github.com/anthropics/claude-code/issues/36135)). Rewrite the hook commands with concrete paths so they work immediately.
-
-For each of these three SKILL.md files (under the location found in 6a):
-- `kb-learn/SKILL.md`
-- `kb-compact/SKILL.md`
-- `kb-mint/SKILL.md`
-
-Find the `hooks:` block in the frontmatter and replace the `command:` value with the concrete path to `validate_kb.py --hook` using the location from 6a.
-
-### 6c. Suggest monitoring hooks
+### 6b. Suggest monitoring hooks
 
 SessionStart and PreCompact hooks cannot live in skill frontmatter — suggest adding them to settings. Use the `kb-monitor/scripts/analyze_access.py` path from the location found in 6a.
 
@@ -143,9 +132,9 @@ Use AskUserQuestion: "Add monitoring hooks to project settings", "Add to user se
 
 If the user chooses to add, read the target settings file (create `{"hooks":{}}` if missing), merge the SessionStart and PreCompact hooks — do NOT overwrite existing hooks.
 
-### 6d. Suggest validation hooks for settings
+### 6c. Suggest validation hooks for settings
 
-The skills already have PostToolUse validation hooks in their frontmatter (updated in 6b), so KB changes through `/kb-learn`, `/kb-compact`, and `/kb-mint` are already covered. However, an agent might directly edit a KB file without going through a skill. Adding the same PostToolUse hook to settings catches those cases too. Good to have, but not a must.
+The skills already have PostToolUse validation hooks in their frontmatter, so KB changes through `/kb-learn`, `/kb-compact`, and `/kb-mint` are already covered. However, an agent might directly edit a KB file without going through a skill. Adding the same PostToolUse hook to settings catches those cases too. Good to have, but not a must.
 
 > **Optional**: Add a global validation hook to catch direct KB edits outside of skills:
 >
@@ -171,11 +160,11 @@ The skills already have PostToolUse validation hooks in their frontmatter (updat
 
 Use AskUserQuestion: "Add validation hook to project settings", "Add to user settings", "Skip".
 
-If the user chooses to add, merge into the same settings file used in 6c — do NOT overwrite existing hooks.
+If the user chooses to add, merge into the same settings file used in 6b — do NOT overwrite existing hooks.
 
 ## 7. Confirm
 
-Tell the user: "KB is set up. Restart Claude Code to pick up the new hooks, then start learning with `/kb-learn`."
+Tell the user: "KB is set up. If you added settings hooks, restart Claude Code to pick them up. Start learning with `/kb-learn`."
 
 ---
 
