@@ -19,13 +19,10 @@ class TestCheckConfidenceTags:
         files = {"topic/note.md": content}
         assert check_confidence_tags(files) == []
 
-    def test_low_tag_warns(self):
+    def test_low_tag_silent(self):
         content = note() + "\nShaky claim. <conf:low>\n"
         files = {"topic/note.md": content}
-        issues = check_confidence_tags(files)
-        assert len(issues) == 1
-        assert issues[0].level == "warning"
-        assert issues[0].check == "low_confidence"
+        assert check_confidence_tags(files) == []
 
     def test_malformed_tag_errors(self):
         content = note() + "\nBad claim. <conf:HIGH>\n"
@@ -43,12 +40,19 @@ class TestCheckConfidenceTags:
         assert issues[0].level == "error"
         assert issues[0].check == "invalid_conf_tag"
 
-    def test_multiple_tags(self):
+    def test_multiple_valid_tags_no_issues(self):
         content = note() + "\nClaim A. <conf:high>\nClaim B. <conf:low>\n"
         files = {"topic/note.md": content}
-        issues = check_confidence_tags(files)
-        assert len(issues) == 1  # only the low one warns
-        assert issues[0].check == "low_confidence"
+        assert check_confidence_tags(files) == []
+
+    def test_many_low_tags_silent(self):
+        # Regression: validator used to emit one warning per <conf:low>,
+        # polluting agent context. Many low tags must produce zero issues.
+        content = note() + "\n".join(
+            f"Claim {i}. <conf:low>" for i in range(20)
+        )
+        files = {"topic/note.md": content}
+        assert check_confidence_tags(files) == []
 
     def test_mixed_valid_and_malformed(self):
         content = note() + "\nClaim A. <conf:high>\nClaim B. <conf:MEDIUM>\n"

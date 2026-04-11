@@ -670,12 +670,6 @@ def check_confidence_tags(files: dict[str, str]) -> list[Issue]:
                     f"Malformed confidence tag: {tag}",
                     "valid tags: <conf:high>, <conf:medium>, <conf:low>",
                 ))
-            elif tag == "<conf:low>":
-                issues.append(Issue(
-                    "warning", "low_confidence", rel_path,
-                    "Low-confidence claim present",
-                    f"found {tag} — consider verifying or removing",
-                ))
     return issues
 
 

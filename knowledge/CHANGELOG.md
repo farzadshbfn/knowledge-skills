@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-04-11 -- [fix] Stop emitting low_confidence validator warning
+
+Validator no longer warns on `<conf:low>` tags. The warning fired on every
+low-confidence claim and polluted agent context with no actionable signal —
+low-confidence claims are a normal KB state, handled by the approval flow, not
+a validation issue. Malformed-tag errors are preserved.
+
+- UPDATE: `learn/skill/scripts/validate_kb.py` — check_confidence_tags() no longer emits low_confidence warnings
+- UPDATE: `tests/learn/test_confidence.py` — test_low_tag_silent, test_multiple_valid_tags_no_issues
+
 ## 2026-03-30 -- [feature] Cross-project global KB read aggregation
 
 When a project reads from the global KB, the read is now logged to a shared
